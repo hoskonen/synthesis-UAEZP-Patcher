@@ -1,0 +1,8 @@
+{
+  "AssignMissingCellEncounterZones": true,
+  "AssignMissingWorldspaceEncounterZones": true,
+  "DisableCombatBoundaries": true,
+  "DummyZoneMode": "DeterministicRandom",
+  "Seed": 38174,
+  "DryRun": true
+}
