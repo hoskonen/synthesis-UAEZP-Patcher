@@ -17,15 +17,12 @@ public sealed class SettingsAndReportTests
     }
 
     [TestMethod]
-    public void DryRunFalseRefusesMutationMilestone()
+    public void DryRunFalseIsAValidMilestoneTwoSetting()
     {
         var settings = new Settings { DryRun = false };
 
-        InvalidOperationException error = Assert.ThrowsExactly<InvalidOperationException>(
-            () => MilestoneGuard.EnsureReadOnly(settings));
-
-        StringAssert.Contains(error.Message, "DryRun=false is not supported");
-        StringAssert.Contains(error.Message, "No records were modified");
+        SettingsValidator.Validate(settings);
+        Assert.IsFalse(settings.DryRun);
     }
 
     [TestMethod]

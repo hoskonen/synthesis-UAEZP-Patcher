@@ -1,3 +1,4 @@
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
@@ -40,11 +41,13 @@ public static class StatePlanner
             SourcePluginValidator.Validate(sourceCandidates);
         source = ResolveWinningDummyZones(state, source);
 
-        List<RecordSnapshot> cells = state.LoadOrder.PriorityOrder
+        var cellContexts = state.LoadOrder.PriorityOrder
             .Cell()
             .WinningContextOverrides(
                 state.LinkCache,
                 includeDeletedRecords: true)
+            .ToList();
+        List<RecordSnapshot> cells = cellContexts
             .Select(context => ToEncounterZoneLinkSnapshot(
                 PlannedRecordType.Cell,
                 context.Record,
@@ -53,9 +56,11 @@ public static class StatePlanner
                 state.LinkCache))
             .ToList();
 
-        List<RecordSnapshot> worldspaces = state.LoadOrder.PriorityOrder
+        var worldspaceContexts = state.LoadOrder.PriorityOrder
             .Worldspace()
             .WinningContextOverrides(includeDeletedRecords: true)
+            .ToList();
+        List<RecordSnapshot> worldspaces = worldspaceContexts
             .Select(context => ToEncounterZoneLinkSnapshot(
                 PlannedRecordType.Worldspace,
                 context.Record,
@@ -64,9 +69,11 @@ public static class StatePlanner
                 state.LinkCache))
             .ToList();
 
-        List<RecordSnapshot> encounterZones = state.LoadOrder.PriorityOrder
+        var encounterZoneContexts = state.LoadOrder.PriorityOrder
             .EncounterZone()
             .WinningContextOverrides(includeDeletedRecords: true)
+            .ToList();
+        List<RecordSnapshot> encounterZones = encounterZoneContexts
             .Select(context => new RecordSnapshot(
                 PlannedRecordType.EncounterZone,
                 context.Record.FormKey,
@@ -84,7 +91,24 @@ public static class StatePlanner
             worldspaces,
             encounterZones);
 
-        return new PlanningRun(source, plan);
+        var applyContexts = new ApplyContextCatalog(
+            cellContexts.ToDictionary(
+                context => context.Record.FormKey,
+                context => new Func<ISkyrimMod, ICell>(
+                    patchMod => context.GetOrAddAsOverride(patchMod))),
+            worldspaceContexts.ToDictionary(
+                context => context.Record.FormKey,
+                context => new Func<ISkyrimMod, IWorldspace>(
+                    patchMod => context.GetOrAddAsOverride(patchMod))),
+            encounterZoneContexts.ToDictionary(
+                context => context.Record.FormKey,
+                context => new Func<ISkyrimMod, IEncounterZone>(
+                    patchMod => context.GetOrAddAsOverride(patchMod))));
+
+        return new PlanningRun(source, plan)
+        {
+            ApplyContexts = applyContexts,
+        };
     }
 
     private static DummyZoneDefinition ToDummyZoneDefinition(

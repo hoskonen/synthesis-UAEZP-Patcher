@@ -1,0 +1,6 @@
+{
+  "AddGitPatcher": {
+    "Url": "https://github.com/hoskonen/synthesis-UAEZP-Patcher",
+    "SelectedProject": "UAEZPSynthesisPatcher\\UAEZPSynthesisPatcher.csproj"
+  }
+}

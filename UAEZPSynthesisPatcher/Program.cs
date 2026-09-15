@@ -26,9 +26,16 @@ public static class Program
         IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
     {
         Settings settings = _settings.Value;
-        MilestoneGuard.EnsureReadOnly(settings);
+        SettingsValidator.Validate(settings);
 
         PlanningRun run = StatePlanner.Build(state, settings);
-        Console.WriteLine(DryRunReport.Render(run, settings));
+        if (settings.DryRun)
+        {
+            Console.WriteLine(DryRunReport.Render(run, settings));
+            return;
+        }
+
+        ApplyResult result = PatchApplier.Apply(state.PatchMod, run);
+        Console.WriteLine(ApplyReport.Render(run.Plan, result));
     }
 }

@@ -29,18 +29,3 @@ public static class SettingsValidator
         }
     }
 }
-
-public static class MilestoneGuard
-{
-    public static void EnsureReadOnly(Settings settings)
-    {
-        SettingsValidator.Validate(settings);
-
-        if (!settings.DryRun)
-        {
-            throw new InvalidOperationException(
-                "DryRun=false is not supported in milestone 1. " +
-                "No records were modified; record mutation has not been implemented.");
-        }
-    }
-}

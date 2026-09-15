@@ -4,9 +4,9 @@ This project is a Synthesis port and planned evolution of the Ultimate Automated
 
 ## Current status
 
-Milestone 1 is a strictly read-only planner. It discovers the active source plugin, validates its dummy encounter zones, scans winning load-order records, calculates deterministic proposed changes, and prints a dry-run report.
+Milestone 2 discovers and validates the active source plugin, scans winning load-order records, calculates deterministic changes, and either reports or applies that same validated plan.
 
-It does **not** create CELL, WRLD, or ECZN overrides yet. Setting `DryRun` to `false` stops with a clear error and still writes no functional records.
+Run with `DryRun=true` first. Dry Run is strictly read-only and creates no functional Skyrim overrides. With `DryRun=false`, the patcher writes the planned CELL, WRLD, and ECZN overrides and verifies the applied counts and required fields before reporting completion.
 
 ## Source plugin requirement
 
@@ -17,15 +17,20 @@ Exactly one supported `UAEZP.esp` must be active. The original mod's Easy and Ha
 
 Both supported variants must contain exactly nine `DummyEncounterZone0` through `DummyEncounterZone8` records at local FormIDs `000800` through `000808`, with the audited common fields and flags. Missing, duplicate, deleted, or unfamiliar source schemas fail before planning. Replacement encounter zones are not generated.
 
-## What the planner checks
+## Planning and apply behavior
 
 - Winning `CELL` records, including interior and nested exterior cells, are scanned through Mutagen contexts. Missing `XEZN` links are assigned a planned dummy zone.
 - Winning `WRLD` records with missing `XEZN` links receive a planned assignment. Worldspaces that already have `XEZN` do not produce planned overrides.
 - Winning `ECZN` records lacking `Disable Combat Boundary` receive a planned flag addition.
 - Deleted winning records are counted and skipped; nothing is resurrected.
 - A non-null but unresolved CELL/WRLD `XEZN` is preserved for xEdit parity and reported as a warning count.
+- Apply uses the winning Mutagen record context, so fields forwarded by compatibility patches remain present in the generated override.
+- CELL and WRLD changes set only the planned `XEZN`; ECZN changes preserve the existing flag set and OR in `Disable Combat Boundary`.
+- Existing `XEZN` values, including unresolved non-null links, are never replaced. Deleted winners remain skipped and are never resurrected.
 
 No cell types, EditorIDs, or origin plugins are excluded.
+
+For exterior CELL overrides, Mutagen's context-based `GetOrAddAsOverride` creates the required WRLD header and exterior block/sub-block path. It does not copy sibling cells or the target CELL's persistent/temporary children. A separately planned WRLD mutation reuses that structural parent and adds its planned `XEZN`.
 
 ## Deterministic assignment
 
@@ -58,15 +63,21 @@ The console/Synthesis log reports the selected Easy or Hard source, algorithm an
 
 It also attributes pre-existing relevant state to the plugin containing each current winning override—not to the record's origin/master plugin. The provenance section includes resolved and unresolved CELL/WRLD links, top-ten winning-plugin breakdowns, exact matches against the nine validated UAEZP dummy FormKeys, ECZN `Disable Combat Boundary` provenance, and up to 25 deterministic non-base-game CELL examples. These diagnostics do not affect eligibility or planned assignments.
 
-Milestone 1 never calls `GetOrAddAsOverride` and never accesses `state.PatchMod` during planning.
+Planning never accesses `state.PatchMod`. Apply consumes the captured winning contexts and exact assignments already stored in the plan; it does not rerun assignment or reconstruct records from their origin/master versions.
+
+## Apply report
+
+With `DryRun=false`, the concise apply report shows planned and applied/verified counts for CELL, WRLD, and ECZN. Any missing context, target mismatch, conflicting pre-existing output `XEZN`, failed field verification, or count mismatch stops the run with a clear error instead of silently skipping a planned mutation.
 
 ## Intentional improvements over `UAEZP.pas`
 
 - deterministic per-FormKey assignment instead of an order-dependent shared random stream;
-- no planned WRLD override when a winning worldspace already has `XEZN`;
+- no WRLD override when a winning worldspace already has `XEZN`;
 - deleted winners are skipped;
-- no deep-copying of cells, worldspaces, or nested children;
+- context-based minimal overrides instead of deep-copying cells, worldspaces, or nested children;
 - strict source schema validation before planning.
+
+Unlike the original xEdit script, the Synthesis patcher does not forward every processed WRLD and does not deep-copy CELL child groups. Re-running against the same load order and settings reproduces the same assignments.
 
 The detailed source audit and future mutation plan are in [docs/UAEZP-XEDIT-AUDIT.md](docs/UAEZP-XEDIT-AUDIT.md).
 

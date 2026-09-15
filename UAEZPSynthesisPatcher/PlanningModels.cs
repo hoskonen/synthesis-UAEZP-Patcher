@@ -78,6 +78,20 @@ public sealed record PlannedChange(
     RecordSnapshot Target,
     ValidatedDummyZone? AssignedDummyZone);
 
+public sealed record ApplyContextCatalog(
+    IReadOnlyDictionary<FormKey, Func<ISkyrimMod, ICell>> Cells,
+    IReadOnlyDictionary<FormKey, Func<ISkyrimMod, IWorldspace>> Worldspaces,
+    IReadOnlyDictionary<FormKey, Func<ISkyrimMod, IEncounterZone>> EncounterZones);
+
+public sealed record ApplyResult(
+    int CellsApplied,
+    int WorldspacesApplied,
+    int EncounterZonesApplied)
+{
+    public int TotalApplied =>
+        CellsApplied + WorldspacesApplied + EncounterZonesApplied;
+}
+
 public sealed record RecordPlanSummary(
     int WinningRecordsScanned,
     int MissingRequirement,
@@ -105,4 +119,7 @@ public sealed record PatchPlan(
 
 public sealed record PlanningRun(
     ValidatedSourcePlugin SourcePlugin,
-    PatchPlan Plan);
+    PatchPlan Plan)
+{
+    public ApplyContextCatalog? ApplyContexts { get; init; }
+}
