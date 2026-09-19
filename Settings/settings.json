@@ -4,5 +4,5 @@
   "DisableCombatBoundaries": true,
   "DummyZoneMode": "DeterministicRandom",
   "Seed": 38174,
-  "DryRun": false
+  "DryRun": true
 }
