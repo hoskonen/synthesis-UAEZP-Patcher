@@ -293,11 +293,35 @@ public sealed class ReadOnlyPlannerTests
     }
 
     [TestMethod]
-    public void FwmfWinnerWithoutValidEarlierAssignmentDoesNotFallBackToDummy()
+    public void FwmfWinnerWithoutValidEarlierAssignmentUsesEnabledNormalAssignment()
     {
         var settings = new Settings
         {
             AssignMissingCellEncounterZones = true,
+            ForwardEncounterZonesThroughFwmf = true,
+        };
+        RecordSnapshot cell = TestData.Record(
+            PlannedRecordType.Cell,
+            1,
+            winningModKey: FwmfModKey);
+
+        PatchPlan plan = Build(settings, cells: [cell]);
+
+        Assert.AreEqual(0, plan.FwmfForwards.Cells);
+        Assert.AreEqual(1, plan.TotalPlannedOverrides);
+        Assert.AreEqual(1, plan.AssignmentDistribution.Values.Sum());
+        Assert.IsNotNull(plan.Changes.Single().AssignedDummyZone);
+        Assert.IsNull(plan.Changes.Single().ForwardedEncounterZone);
+    }
+
+    [TestMethod]
+    public void ForwardingOnlyDoesNothingWithoutValidEarlierAssignment()
+    {
+        var settings = new Settings
+        {
+            AssignMissingCellEncounterZones = false,
+            AssignMissingWorldspaceEncounterZones = false,
+            DisableCombatBoundaries = false,
             ForwardEncounterZonesThroughFwmf = true,
         };
         RecordSnapshot cell = TestData.Record(

@@ -130,9 +130,8 @@ public static class ReadOnlyPlanner
                     IncrementOriginPluginCount(record, perOriginPlugin);
                     forwardedThroughFwmf++;
                     planned++;
+                    continue;
                 }
-
-                continue;
             }
 
             if (!enabled)

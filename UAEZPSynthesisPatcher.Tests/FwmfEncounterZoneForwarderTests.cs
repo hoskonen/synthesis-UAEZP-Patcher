@@ -13,6 +13,7 @@ public sealed class FwmfEncounterZoneForwarderTests
     [DataRow("FWMF for Fantasy Paper Maps.esp")]
     [DataRow("FWMF - Map Addon.esl")]
     [DataRow("Flat World Map Framework.esp")]
+    [DataRow("RW2 - Patch - FWMF for Fantasy Paper Maps.esp")]
     public void RecognizesFwmfFamilyPluginNames(string fileName)
     {
         Assert.IsTrue(

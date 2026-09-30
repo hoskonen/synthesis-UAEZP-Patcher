@@ -44,6 +44,12 @@ which produces:
 UAEZP-Patcher.esp
 ```
 
+For FWMF compatibility, add the same patcher a second time in a later Synthesis
+group named `UAEZP-FWMF-Patch`. In that group, enable only **Forward encounter
+zones through FWMF**: disable both **Assign Missing...** settings and **Disable
+Combat Boundaries**. Synthesis creates the separate group output; the patcher
+does not create or name a second plugin itself.
+
 ## Recommended workflow
 
 1. Add the patcher to a dedicated Synthesis group.
@@ -72,7 +78,7 @@ The patcher operates on the winning records visible to Synthesis at execution ti
 - Existing CELL and WRLD `XEZN` values are never replaced.
 - Non-null unresolved `XEZN` links are treated as existing and preserved.
 - FWMF forwarding is opt-in and checks the plugin that supplied the actual winning override, not merely whether FWMF appears somewhere in the load order.
-- For an eligible empty-XEZN FWMF winner, the nearest earlier valid assignment is restored. If none exists, that record is left unchanged rather than receiving a random fallback assignment.
+- For an eligible empty-XEZN FWMF winner, the nearest earlier valid assignment is restored. If none exists, forwarding does nothing; normal dummy assignment still applies only when the corresponding `AssignMissing...` option is enabled.
 - Deleted winning records are not overridden or resurrected.
 - ECZN flags and unrelated data are preserved when `Disable Combat Boundary` is added.
 - Exterior CELL overrides contain only the required WRLD/block/sub-block structure and target CELL header; sibling cells and persistent/temporary child records are not copied.

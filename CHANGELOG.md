@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added opt-in, XEZN-specific forwarding through actual winning FWMF-family CELL and WRLD overrides.
+- FWMF forwarding can run independently in a late Synthesis group, recognizes compatibility-patch filenames containing a standalone `FWMF` token, and falls back to normal missing-zone assignment only when that separate option is enabled.
 - Added separate CELL and WRLD forwarding counts to Dry Run and Apply reports.
 
 ## 0.1.0

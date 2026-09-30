@@ -441,6 +441,167 @@ public sealed class PatchApplierTests
     }
 
     [TestMethod]
+    public void ForwardingOnlyOutputContainsOnlyRecordsThatNeedForwarding()
+    {
+        var baseMod = NewMod("Base.esm");
+        EncounterZone cellZone = baseMod.EncounterZones.AddNew();
+        EncounterZone worldZone = baseMod.EncounterZones.AddNew();
+        Cell forwardedCell = AddInteriorCell(baseMod);
+        Cell noEarlierCell = AddInteriorCell(baseMod);
+        Worldspace forwardedWorld = baseMod.Worldspaces.AddNew();
+
+        var fwmf = NewMod("FWMF.esp");
+        ICell cellWinner = AddInteriorOverride(fwmf, forwardedCell);
+        cellWinner.EditorID = "ForwardThisCell";
+        ICell noEarlierWinner = AddInteriorOverride(fwmf, noEarlierCell);
+        noEarlierWinner.EditorID = "LeaveThisCellAlone";
+        var worldWinner = new Worldspace(
+            forwardedWorld.FormKey,
+            SkyrimRelease.SkyrimSE)
+        {
+            EditorID = "ForwardThisWorld",
+        };
+        fwmf.Worldspaces.Add(worldWinner);
+
+        var ordinary = NewMod("OrdinaryWinner.esp");
+        Cell ordinaryCell = AddInteriorCell(ordinary);
+        EncounterZone untouchedEncounterZone = ordinary.EncounterZones.AddNew();
+
+        RecordSnapshot cellSnapshot = Snapshot(
+            PlannedRecordType.Cell,
+            cellWinner) with
+        {
+            WinningModKey = fwmf.ModKey,
+            EarlierResolvableEncounterZoneTarget = cellZone.FormKey,
+        };
+        RecordSnapshot noEarlierSnapshot = Snapshot(
+            PlannedRecordType.Cell,
+            noEarlierWinner) with
+        {
+            WinningModKey = fwmf.ModKey,
+        };
+        RecordSnapshot worldSnapshot = Snapshot(
+            PlannedRecordType.Worldspace,
+            worldWinner) with
+        {
+            WinningModKey = fwmf.ModKey,
+            EarlierResolvableEncounterZoneTarget = worldZone.FormKey,
+        };
+        RecordSnapshot ordinarySnapshot = Snapshot(
+            PlannedRecordType.Cell,
+            ordinaryCell);
+        RecordSnapshot encounterZoneSnapshot = Snapshot(
+            PlannedRecordType.EncounterZone,
+            untouchedEncounterZone);
+        var patch = NewMod("LateOutput.esp");
+        PlanningRun run = BuildRun(
+            cells: [cellSnapshot, noEarlierSnapshot, ordinarySnapshot],
+            worldspaces: [worldSnapshot],
+            encounterZones: [encounterZoneSnapshot],
+            cellFactories: new Dictionary<FormKey, Func<ISkyrimMod, ICell>>
+            {
+                [forwardedCell.FormKey] = output =>
+                    AddInteriorOverride(output, cellWinner),
+            },
+            worldspaceFactories:
+                new Dictionary<FormKey, Func<ISkyrimMod, IWorldspace>>
+                {
+                    [forwardedWorld.FormKey] = output =>
+                        output.Worldspaces.GetOrAddAsOverride(worldWinner),
+                },
+            settings: ForwardingOnlySettings());
+
+        ApplyResult result = PatchApplier.Apply(patch, run);
+
+        Assert.AreEqual(2, run.Plan.TotalPlannedOverrides);
+        Assert.IsTrue(run.Plan.Changes.All(change => change.IsFwmfForward));
+        Assert.AreEqual(1, result.CellsForwardedThroughFwmf);
+        Assert.AreEqual(1, result.WorldspacesForwardedThroughFwmf);
+        Assert.AreEqual(
+            1,
+            patch.EnumerateMajorRecords().OfType<ICellGetter>().Count());
+        Assert.AreEqual(1, patch.Worldspaces.Count);
+        Assert.AreEqual(0, patch.EncounterZones.Count);
+        Assert.AreEqual(
+            cellZone.FormKey,
+            patch.EnumerateMajorRecords()
+                .OfType<ICellGetter>()
+                .Single()
+                .EncounterZone.FormKey);
+        Assert.AreEqual(
+            worldZone.FormKey,
+            patch.Worldspaces.Single().EncounterZone.FormKey);
+    }
+
+    [TestMethod]
+    public void LateOutputForwardsFromAssignmentThroughWinningRw2FwmfPatch()
+    {
+        var baseMod = NewMod("Base.esm");
+        EncounterZone baseZone = baseMod.EncounterZones.AddNew();
+        Cell baseCell = AddInteriorCell(baseMod);
+        baseCell.EncounterZone.SetTo(baseZone.FormKey);
+
+        var assignment = NewMod("UAEZP-Synthesis-Assignment.esp");
+        EncounterZone assignedZone = assignment.EncounterZones.AddNew();
+        ICell assignedCell = AddInteriorOverride(assignment, baseCell);
+        assignedCell.EncounterZone.SetTo(assignedZone.FormKey);
+
+        var fwmf = NewMod("FWMF.esp");
+        ICell fwmfCell = AddInteriorOverride(fwmf, assignedCell);
+        fwmfCell.EncounterZone.SetTo(FormKey.Null);
+        fwmfCell.EditorID = "FwmfCell";
+        fwmfCell.WaterHeight = 17.25f;
+
+        var rw2Patch = NewMod(
+            "RW2 - Patch - FWMF for Fantasy Paper Maps.esp");
+        ICell rw2Winner = AddInteriorOverride(rw2Patch, fwmfCell);
+        rw2Winner.EditorID = "WinningRw2FwmfCell";
+        rw2Winner.WaterHeight = 83.5f;
+
+        ISkyrimModGetter[] listedOrder =
+            [baseMod, assignment, fwmf, rw2Patch];
+        ILinkCache<ISkyrimMod, ISkyrimModGetter> cache =
+            listedOrder.ToImmutableLinkCache();
+        var winningContext = listedOrder.Reverse().Cell()
+            .WinningContextOverrides(cache)
+            .Single(candidate => candidate.Record.FormKey == baseCell.FormKey);
+        FormKey? target = FwmfEncounterZoneForwarder
+            .FindNearestEarlierCellEncounterZone(
+                cache,
+                baseCell.FormKey,
+                winningContext.ModKey);
+        RecordSnapshot snapshot = Snapshot(
+            PlannedRecordType.Cell,
+            winningContext.Record) with
+        {
+            WinningModKey = winningContext.ModKey,
+            EarlierResolvableEncounterZoneTarget = target,
+        };
+        var lateOutput = NewMod("LateOutput.esp");
+        PlanningRun run = BuildRun(
+            cells: [snapshot],
+            cellFactories: new Dictionary<FormKey, Func<ISkyrimMod, ICell>>
+            {
+                [baseCell.FormKey] = output =>
+                    winningContext.GetOrAddAsOverride(output),
+            },
+            settings: ForwardingOnlySettings());
+
+        ApplyResult result = PatchApplier.Apply(lateOutput, run);
+        ICellGetter applied = lateOutput.EnumerateMajorRecords()
+            .OfType<ICellGetter>()
+            .Single();
+
+        Assert.AreEqual(rw2Patch.ModKey, winningContext.ModKey);
+        Assert.AreEqual(assignedZone.FormKey, target);
+        Assert.AreEqual(assignedZone.FormKey, applied.EncounterZone.FormKey);
+        Assert.AreEqual("WinningRw2FwmfCell", applied.EditorID);
+        Assert.AreEqual(83.5f, applied.WaterHeight);
+        Assert.AreEqual(1, result.CellsForwardedThroughFwmf);
+        Assert.AreEqual(0, lateOutput.EncounterZones.Count);
+    }
+
+    [TestMethod]
     public void AppliesEncounterZoneByOringFlagAndPreservingData()
     {
         var source = NewMod("EncounterZoneWinner.esp");
@@ -733,6 +894,18 @@ public sealed class PatchApplierTests
                     new Dictionary<FormKey, Func<ISkyrimMod, IWorldspace>>(),
                 encounterZoneFactories ??
                     new Dictionary<FormKey, Func<ISkyrimMod, IEncounterZone>>()),
+        };
+    }
+
+    private static Settings ForwardingOnlySettings()
+    {
+        return new Settings
+        {
+            DryRun = false,
+            AssignMissingCellEncounterZones = false,
+            AssignMissingWorldspaceEncounterZones = false,
+            DisableCombatBoundaries = false,
+            ForwardEncounterZonesThroughFwmf = true,
         };
     }
 

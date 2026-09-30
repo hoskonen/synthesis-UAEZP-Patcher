@@ -10,8 +10,8 @@ public static class FwmfEncounterZoneForwarder
     {
         string name = Path.GetFileNameWithoutExtension(
             modKey.FileName.String);
-        return HasFamilyPrefix(name, "FWMF") ||
-            HasFamilyPrefix(name, "Flat World Map Framework");
+        return HasFamilyToken(name, "FWMF") ||
+            HasFamilyToken(name, "Flat World Map Framework");
     }
 
     public static FormKey? FindNearestEarlierCellEncounterZone(
@@ -71,15 +71,34 @@ public static class FwmfEncounterZoneForwarder
         return null;
     }
 
-    private static bool HasFamilyPrefix(string name, string prefix)
+    private static bool HasFamilyToken(string name, string familyName)
     {
-        if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        int searchStart = 0;
+        while (searchStart < name.Length)
         {
-            return false;
+            int index = name.IndexOf(
+                familyName,
+                searchStart,
+                StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            int end = index + familyName.Length;
+            bool startsAtBoundary = index == 0 ||
+                !char.IsLetterOrDigit(name[index - 1]);
+            bool endsAtBoundary = end == name.Length ||
+                !char.IsLetterOrDigit(name[end]);
+            if (startsAtBoundary && endsAtBoundary)
+            {
+                return true;
+            }
+
+            searchStart = index + 1;
         }
 
-        return name.Length == prefix.Length ||
-            !char.IsLetterOrDigit(name[prefix.Length]);
+        return false;
     }
 
     private static bool IsValidEncounterZone(
