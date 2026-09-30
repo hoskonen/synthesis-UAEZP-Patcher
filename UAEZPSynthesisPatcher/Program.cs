@@ -25,6 +25,8 @@ public static class Program
     public static void RunPatch(
         IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
     {
+        ConfigureOutputMod(state.PatchMod);
+
         Settings settings = _settings.Value;
         SettingsValidator.Validate(settings);
 
@@ -37,5 +39,11 @@ public static class Program
 
         ApplyResult result = PatchApplier.Apply(state.PatchMod, run);
         Console.WriteLine(ApplyReport.Render(run.Plan, result));
+    }
+
+    public static void ConfigureOutputMod(ISkyrimMod patchMod)
+    {
+        ArgumentNullException.ThrowIfNull(patchMod);
+        patchMod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
     }
 }
