@@ -48,12 +48,24 @@ public static class StatePlanner
                 includeDeletedRecords: true)
             .ToList();
         List<RecordSnapshot> cells = cellContexts
-            .Select(context => ToEncounterZoneLinkSnapshot(
-                PlannedRecordType.Cell,
-                context.Record,
-                context.Record.EncounterZone.FormKey,
-                context.ModKey,
-                state.LinkCache))
+            .Select(context =>
+            {
+                RecordSnapshot snapshot = ToEncounterZoneLinkSnapshot(
+                    PlannedRecordType.Cell,
+                    context.Record,
+                    context.Record.EncounterZone.FormKey,
+                    context.ModKey,
+                    state.LinkCache);
+                return snapshot with
+                {
+                    EarlierResolvableEncounterZoneTarget =
+                        FindEarlierCellEncounterZone(
+                            state,
+                            settings,
+                            context.ModKey,
+                            context.Record),
+                };
+            })
             .ToList();
 
         var worldspaceContexts = state.LoadOrder.PriorityOrder
@@ -61,12 +73,24 @@ public static class StatePlanner
             .WinningContextOverrides(includeDeletedRecords: true)
             .ToList();
         List<RecordSnapshot> worldspaces = worldspaceContexts
-            .Select(context => ToEncounterZoneLinkSnapshot(
-                PlannedRecordType.Worldspace,
-                context.Record,
-                context.Record.EncounterZone.FormKey,
-                context.ModKey,
-                state.LinkCache))
+            .Select(context =>
+            {
+                RecordSnapshot snapshot = ToEncounterZoneLinkSnapshot(
+                    PlannedRecordType.Worldspace,
+                    context.Record,
+                    context.Record.EncounterZone.FormKey,
+                    context.ModKey,
+                    state.LinkCache);
+                return snapshot with
+                {
+                    EarlierResolvableEncounterZoneTarget =
+                        FindEarlierWorldspaceEncounterZone(
+                            state,
+                            settings,
+                            context.ModKey,
+                            context.Record),
+                };
+            })
             .ToList();
 
         var encounterZoneContexts = state.LoadOrder.PriorityOrder
@@ -199,5 +223,61 @@ public static class StatePlanner
         }
 
         return source with { DummyZones = winners };
+    }
+
+    private static FormKey? FindEarlierCellEncounterZone(
+        IPatcherState<ISkyrimMod, ISkyrimModGetter> state,
+        Settings settings,
+        ModKey winningModKey,
+        ICellGetter winningRecord)
+    {
+        if (!ShouldInspectEarlierOverrides(
+                settings,
+                winningModKey,
+                winningRecord.IsDeleted,
+                winningRecord.EncounterZone.FormKey))
+        {
+            return null;
+        }
+
+        return FwmfEncounterZoneForwarder
+            .FindNearestEarlierCellEncounterZone(
+                state.LinkCache,
+                winningRecord.FormKey,
+                winningModKey);
+    }
+
+    private static FormKey? FindEarlierWorldspaceEncounterZone(
+        IPatcherState<ISkyrimMod, ISkyrimModGetter> state,
+        Settings settings,
+        ModKey winningModKey,
+        IWorldspaceGetter winningRecord)
+    {
+        if (!ShouldInspectEarlierOverrides(
+                settings,
+                winningModKey,
+                winningRecord.IsDeleted,
+                winningRecord.EncounterZone.FormKey))
+        {
+            return null;
+        }
+
+        return FwmfEncounterZoneForwarder
+            .FindNearestEarlierWorldspaceEncounterZone(
+                state.LinkCache,
+                winningRecord.FormKey,
+                winningModKey);
+    }
+
+    private static bool ShouldInspectEarlierOverrides(
+        Settings settings,
+        ModKey winningModKey,
+        bool isDeleted,
+        FormKey encounterZone)
+    {
+        return settings.ForwardEncounterZonesThroughFwmf &&
+            FwmfEncounterZoneForwarder.IsFwmfFamilyPlugin(winningModKey) &&
+            !isDeleted &&
+            encounterZone.IsNull;
     }
 }

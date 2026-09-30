@@ -1,3 +1,5 @@
+using Mutagen.Bethesda.Synthesis.Settings;
+
 namespace UAEZPSynthesisPatcher;
 
 public enum DummyZoneMode
@@ -11,6 +13,8 @@ public sealed class Settings
     public bool AssignMissingCellEncounterZones { get; set; } = true;
     public bool AssignMissingWorldspaceEncounterZones { get; set; } = true;
     public bool DisableCombatBoundaries { get; set; } = true;
+    [SynthesisSettingName("Forward encounter zones through FWMF")]
+    public bool ForwardEncounterZonesThroughFwmf { get; set; }
     public DummyZoneMode DummyZoneMode { get; set; } = DummyZoneMode.DeterministicRandom;
     public int Seed { get; set; } = 38174;
     public bool DryRun { get; set; } = true;

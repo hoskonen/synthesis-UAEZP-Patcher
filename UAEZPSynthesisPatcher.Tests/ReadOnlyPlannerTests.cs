@@ -6,6 +6,9 @@ namespace UAEZPSynthesisPatcher.Tests;
 [TestClass]
 public sealed class ReadOnlyPlannerTests
 {
+    private static readonly ModKey FwmfModKey =
+        ModKey.FromFileName("FWMF for Fantasy Paper Maps.esp");
+
     [TestMethod]
     public void CellWithExistingEncounterZoneHasNoPlannedChange()
     {
@@ -174,6 +177,141 @@ public sealed class ReadOnlyPlannerTests
         Assert.AreEqual(0, output.EncounterZones.Count);
     }
 
+    [TestMethod]
+    public void FwmfForwardingIsOptIn()
+    {
+        var settings = new Settings
+        {
+            AssignMissingCellEncounterZones = false,
+            ForwardEncounterZonesThroughFwmf = false,
+        };
+        RecordSnapshot cell = FwmfRecord(
+            PlannedRecordType.Cell,
+            1,
+            new FormKey(TestData.SkyrimModKey, 0x1234));
+
+        PatchPlan plan = Build(settings, cells: [cell]);
+
+        Assert.AreEqual(0, plan.FwmfForwards.Cells);
+        Assert.AreEqual(0, plan.TotalPlannedOverrides);
+    }
+
+    [TestMethod]
+    public void DisabledFwmfForwardingKeepsNormalDummyAssignmentBehavior()
+    {
+        RecordSnapshot cell = FwmfRecord(
+            PlannedRecordType.Cell,
+            1,
+            new FormKey(TestData.SkyrimModKey, 0x1234));
+
+        PatchPlan plan = Build(cells: [cell]);
+
+        Assert.AreEqual(0, plan.FwmfForwards.Cells);
+        Assert.AreEqual(1, plan.TotalPlannedOverrides);
+        Assert.IsNotNull(plan.Changes.Single().AssignedDummyZone);
+        Assert.IsNull(plan.Changes.Single().ForwardedEncounterZone);
+    }
+
+    [TestMethod]
+    public void NonFwmfWinnerDoesNotUseEarlierForwardCandidate()
+    {
+        var settings = new Settings
+        {
+            AssignMissingCellEncounterZones = false,
+            ForwardEncounterZonesThroughFwmf = true,
+        };
+        RecordSnapshot cell = TestData.Record(
+            PlannedRecordType.Cell,
+            1,
+            winningModKey: ModKey.FromFileName("SomeMapMod.esp")) with
+        {
+            EarlierResolvableEncounterZoneTarget =
+                new FormKey(TestData.SkyrimModKey, 0x1234),
+        };
+
+        PatchPlan plan = Build(settings, cells: [cell]);
+
+        Assert.AreEqual(0, plan.FwmfForwards.Cells);
+        Assert.AreEqual(0, plan.TotalPlannedOverrides);
+    }
+
+    [TestMethod]
+    public void FwmfWinnerWithExistingEncounterZoneIsNotForwarded()
+    {
+        var settings = new Settings
+        {
+            AssignMissingCellEncounterZones = false,
+            ForwardEncounterZonesThroughFwmf = true,
+        };
+        RecordSnapshot cell = FwmfRecord(
+            PlannedRecordType.Cell,
+            1,
+            new FormKey(TestData.SkyrimModKey, 0x1234)) with
+        {
+            RequirementSatisfied = true,
+        };
+
+        PatchPlan plan = Build(settings, cells: [cell]);
+
+        Assert.AreEqual(0, plan.FwmfForwards.Cells);
+        Assert.AreEqual(0, plan.TotalPlannedOverrides);
+    }
+
+    [TestMethod]
+    public void FwmfForwardingPlansCellAndWorldspaceSeparately()
+    {
+        var settings = new Settings
+        {
+            AssignMissingCellEncounterZones = false,
+            AssignMissingWorldspaceEncounterZones = false,
+            ForwardEncounterZonesThroughFwmf = true,
+        };
+        FormKey cellTarget = new(TestData.SkyrimModKey, 0x1234);
+        FormKey worldTarget = new(TestData.SkyrimModKey, 0x5678);
+
+        PatchPlan plan = Build(
+            settings,
+            cells: [FwmfRecord(PlannedRecordType.Cell, 1, cellTarget)],
+            worldspaces:
+            [FwmfRecord(PlannedRecordType.Worldspace, 2, worldTarget)]);
+
+        Assert.AreEqual(1, plan.FwmfForwards.Cells);
+        Assert.AreEqual(1, plan.FwmfForwards.Worldspaces);
+        Assert.AreEqual(2, plan.FwmfForwards.Total);
+        Assert.AreEqual(2, plan.TotalPlannedOverrides);
+        Assert.AreEqual(0, plan.AssignmentDistribution.Values.Sum());
+        Assert.AreEqual(
+            cellTarget,
+            plan.Changes.Single(change =>
+                change.Target.RecordType == PlannedRecordType.Cell)
+                .ForwardedEncounterZone);
+        Assert.AreEqual(
+            worldTarget,
+            plan.Changes.Single(change =>
+                change.Target.RecordType == PlannedRecordType.Worldspace)
+                .ForwardedEncounterZone);
+    }
+
+    [TestMethod]
+    public void FwmfWinnerWithoutValidEarlierAssignmentDoesNotFallBackToDummy()
+    {
+        var settings = new Settings
+        {
+            AssignMissingCellEncounterZones = true,
+            ForwardEncounterZonesThroughFwmf = true,
+        };
+        RecordSnapshot cell = TestData.Record(
+            PlannedRecordType.Cell,
+            1,
+            winningModKey: FwmfModKey);
+
+        PatchPlan plan = Build(settings, cells: [cell]);
+
+        Assert.AreEqual(0, plan.FwmfForwards.Cells);
+        Assert.AreEqual(0, plan.TotalPlannedOverrides);
+        Assert.AreEqual(0, plan.AssignmentDistribution.Values.Sum());
+    }
+
     private static PatchPlan Build(
         IEnumerable<RecordSnapshot>? cells = null,
         IEnumerable<RecordSnapshot>? worldspaces = null,
@@ -198,5 +336,16 @@ public sealed class ReadOnlyPlannerTests
             cells ?? [],
             worldspaces ?? [],
             encounterZones ?? []);
+    }
+
+    private static RecordSnapshot FwmfRecord(
+        PlannedRecordType type,
+        uint id,
+        FormKey earlierTarget)
+    {
+        return TestData.Record(type, id, winningModKey: FwmfModKey) with
+        {
+            EarlierResolvableEncounterZoneTarget = earlierTarget,
+        };
     }
 }

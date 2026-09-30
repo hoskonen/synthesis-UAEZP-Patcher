@@ -22,6 +22,9 @@ public static class DryRunReport
             $"Algorithm version: {DeterministicDummyZoneSelector.AlgorithmVersion}");
         text.AppendLine($"Dummy-zone mode: {FormatMode(settings.DummyZoneMode)}");
         text.AppendLine($"Seed: {settings.Seed}");
+        text.AppendLine(
+            $"FWMF XEZN forwarding: " +
+            $"{(settings.ForwardEncounterZonesThroughFwmf ? "Enabled" : "Disabled")}");
         text.AppendLine();
         text.AppendLine(
             $"Dummy zones discovered: {run.SourcePlugin.DummyZones.Count}");
@@ -51,6 +54,12 @@ public static class DryRunReport
         text.AppendLine($"  WRLD: {run.Plan.Worldspaces.PlannedOverrides}");
         text.AppendLine($"  ECZN: {run.Plan.EncounterZones.PlannedOverrides}");
         text.AppendLine($"  Total: {run.Plan.TotalPlannedOverrides}");
+        text.AppendLine();
+
+        text.AppendLine("FWMF XEZN forwards:");
+        text.AppendLine($"  CELL: {run.Plan.FwmfForwards.Cells}");
+        text.AppendLine($"  WRLD: {run.Plan.FwmfForwards.Worldspaces}");
+        text.AppendLine($"  Total: {run.Plan.FwmfForwards.Total}");
         text.AppendLine();
 
         text.AppendLine("Dummy-zone assignment distribution:");

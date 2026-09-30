@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added opt-in, XEZN-specific forwarding through actual winning FWMF-family CELL and WRLD overrides.
+- Added separate CELL and WRLD forwarding counts to Dry Run and Apply reports.
+
 ## 0.1.0
 
 - Initial Synthesis implementation of the UAEZP encounter-zone workflow.

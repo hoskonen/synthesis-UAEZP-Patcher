@@ -342,6 +342,105 @@ public sealed class PatchApplierTests
     }
 
     [TestMethod]
+    public void FwmfCellForwardUsesWinningContextAndOnlyChangesEncounterZone()
+    {
+        var baseMod = NewMod("BaseCell.esm");
+        Cell baseCell = AddInteriorCell(baseMod);
+        var fwmf = NewMod("FWMF for Fantasy Paper Maps.esp");
+        ICell fwmfWinner = AddInteriorOverride(fwmf, baseCell);
+        fwmfWinner.EditorID = "FwmfWinningCell";
+        fwmfWinner.WaterHeight = 91.5f;
+        ISkyrimModGetter[] listedOrder = [baseMod, fwmf];
+        ISkyrimModGetter[] priorityOrder = [fwmf, baseMod];
+        ILinkCache<ISkyrimMod, ISkyrimModGetter> cache =
+            listedOrder.ToImmutableLinkCache();
+        var context = priorityOrder.Cell()
+            .WinningContextOverrides(cache)
+            .Single(candidate => candidate.Record.FormKey == baseCell.FormKey);
+        FormKey earlierTarget = new(TestData.SkyrimModKey, 0x4567);
+        RecordSnapshot snapshot = Snapshot(
+            PlannedRecordType.Cell,
+            context.Record) with
+        {
+            WinningModKey = context.ModKey,
+            EarlierResolvableEncounterZoneTarget = earlierTarget,
+        };
+        var patch = NewMod("Output.esp");
+        PlanningRun run = BuildRun(
+            cells: [snapshot],
+            cellFactories: new Dictionary<FormKey, Func<ISkyrimMod, ICell>>
+            {
+                [baseCell.FormKey] = output =>
+                    context.GetOrAddAsOverride(output),
+            },
+            settings: new Settings
+            {
+                DryRun = false,
+                ForwardEncounterZonesThroughFwmf = true,
+            });
+
+        ApplyResult result = PatchApplier.Apply(patch, run);
+        ICellGetter applied = patch.EnumerateMajorRecords()
+            .OfType<ICellGetter>()
+            .Single();
+
+        Assert.AreEqual(earlierTarget, applied.EncounterZone.FormKey);
+        Assert.AreEqual("FwmfWinningCell", applied.EditorID);
+        Assert.AreEqual(91.5f, applied.WaterHeight);
+        Assert.AreEqual(1, result.CellsForwardedThroughFwmf);
+        Assert.AreEqual(0, result.WorldspacesForwardedThroughFwmf);
+    }
+
+    [TestMethod]
+    public void FwmfWorldspaceForwardPreservesWinningFields()
+    {
+        var baseMod = NewMod("BaseWorld.esm");
+        Worldspace baseWorld = baseMod.Worldspaces.AddNew();
+        var fwmf = NewMod("FWMF.esp");
+        var fwmfWinner = new Worldspace(
+            baseWorld.FormKey,
+            SkyrimRelease.SkyrimSE)
+        {
+            EditorID = "FwmfWinningWorld",
+        };
+        fwmf.Worldspaces.Add(fwmfWinner);
+        ISkyrimModGetter[] priorityOrder = [fwmf, baseMod];
+        var context = priorityOrder.Worldspace()
+            .WinningContextOverrides()
+            .Single(candidate => candidate.Record.FormKey == baseWorld.FormKey);
+        FormKey earlierTarget = new(TestData.SkyrimModKey, 0x7654);
+        RecordSnapshot snapshot = Snapshot(
+            PlannedRecordType.Worldspace,
+            context.Record) with
+        {
+            WinningModKey = context.ModKey,
+            EarlierResolvableEncounterZoneTarget = earlierTarget,
+        };
+        var patch = NewMod("Output.esp");
+        PlanningRun run = BuildRun(
+            worldspaces: [snapshot],
+            worldspaceFactories:
+                new Dictionary<FormKey, Func<ISkyrimMod, IWorldspace>>
+                {
+                    [baseWorld.FormKey] = output =>
+                        context.GetOrAddAsOverride(output),
+                },
+            settings: new Settings
+            {
+                DryRun = false,
+                ForwardEncounterZonesThroughFwmf = true,
+            });
+
+        ApplyResult result = PatchApplier.Apply(patch, run);
+        IWorldspaceGetter applied = patch.Worldspaces.Single();
+
+        Assert.AreEqual(earlierTarget, applied.EncounterZone.FormKey);
+        Assert.AreEqual("FwmfWinningWorld", applied.EditorID);
+        Assert.AreEqual(1, result.WorldspacesForwardedThroughFwmf);
+        Assert.AreEqual(0, result.CellsForwardedThroughFwmf);
+    }
+
+    [TestMethod]
     public void AppliesEncounterZoneByOringFlagAndPreservingData()
     {
         var source = NewMod("EncounterZoneWinner.esp");
@@ -613,10 +712,11 @@ public sealed class PatchApplierTests
         IReadOnlyDictionary<FormKey, Func<ISkyrimMod, IWorldspace>>?
             worldspaceFactories = null,
         IReadOnlyDictionary<FormKey, Func<ISkyrimMod, IEncounterZone>>?
-            encounterZoneFactories = null)
+            encounterZoneFactories = null,
+        Settings? settings = null)
     {
         PatchPlan plan = ReadOnlyPlanner.Build(
-            new Settings { DryRun = false },
+            settings ?? new Settings { DryRun = false },
             TestData.ValidatedZones(),
             cells ?? [],
             worldspaces ?? [],

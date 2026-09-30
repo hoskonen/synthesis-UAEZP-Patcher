@@ -2,6 +2,7 @@
   "AssignMissingCellEncounterZones": true,
   "AssignMissingWorldspaceEncounterZones": true,
   "DisableCombatBoundaries": true,
+  "ForwardEncounterZonesThroughFwmf": false,
   "DummyZoneMode": "DeterministicRandom",
   "Seed": 38174,
   "DryRun": true

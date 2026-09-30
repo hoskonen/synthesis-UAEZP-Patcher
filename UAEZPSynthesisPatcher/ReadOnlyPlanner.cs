@@ -27,6 +27,8 @@ public static class ReadOnlyPlanner
         var changes = new List<PlannedChange>();
         var distribution = orderedZones.ToDictionary(zone => zone.FormKey, _ => 0);
         var perOriginPlugin = new Dictionary<ModKey, int>();
+        int forwardedCells = 0;
+        int forwardedWorldspaces = 0;
 
         RecordPlanSummary cellSummary = PlanAssignments(
             settings.AssignMissingCellEncounterZones,
@@ -36,7 +38,8 @@ public static class ReadOnlyPlanner
             PlannedRecordType.Cell,
             changes,
             distribution,
-            perOriginPlugin);
+            perOriginPlugin,
+            ref forwardedCells);
 
         RecordPlanSummary worldspaceSummary = PlanAssignments(
             settings.AssignMissingWorldspaceEncounterZones,
@@ -46,7 +49,8 @@ public static class ReadOnlyPlanner
             PlannedRecordType.Worldspace,
             changes,
             distribution,
-            perOriginPlugin);
+            perOriginPlugin,
+            ref forwardedWorldspaces);
 
         RecordPlanSummary encounterZoneSummary = PlanFlags(
             settings.DisableCombatBoundaries,
@@ -62,6 +66,9 @@ public static class ReadOnlyPlanner
             perOriginPlugin)
         {
             ExistingStateProvenance = provenance,
+            FwmfForwards = new FwmfForwardCounts(
+                forwardedCells,
+                forwardedWorldspaces),
         };
 
         ValidateInternalConsistency(plan);
@@ -76,7 +83,8 @@ public static class ReadOnlyPlanner
         PlannedRecordType expectedType,
         ICollection<PlannedChange> changes,
         IDictionary<FormKey, int> distribution,
-        IDictionary<ModKey, int> perOriginPlugin)
+        IDictionary<ModKey, int> perOriginPlugin,
+        ref int forwardedThroughFwmf)
     {
         int scanned = 0;
         int missing = 0;
@@ -107,6 +115,26 @@ public static class ReadOnlyPlanner
             }
 
             missing++;
+
+            if (settings.ForwardEncounterZonesThroughFwmf &&
+                FwmfEncounterZoneForwarder.IsFwmfFamilyPlugin(
+                    record.WinningModKey))
+            {
+                if (record.EarlierResolvableEncounterZoneTarget is
+                    FormKey forwardedTarget)
+                {
+                    changes.Add(new PlannedChange(record, null)
+                    {
+                        ForwardedEncounterZone = forwardedTarget,
+                    });
+                    IncrementOriginPluginCount(record, perOriginPlugin);
+                    forwardedThroughFwmf++;
+                    planned++;
+                }
+
+                continue;
+            }
+
             if (!enabled)
             {
                 continue;
@@ -120,8 +148,7 @@ public static class ReadOnlyPlanner
 
             changes.Add(new PlannedChange(record, assigned));
             distribution[assigned.FormKey]++;
-            perOriginPlugin.TryGetValue(record.FormKey.ModKey, out int currentCount);
-            perOriginPlugin[record.FormKey.ModKey] = currentCount + 1;
+            IncrementOriginPluginCount(record, perOriginPlugin);
             planned++;
         }
 
@@ -132,6 +159,16 @@ public static class ReadOnlyPlanner
             deleted,
             unresolved,
             planned);
+    }
+
+    private static void IncrementOriginPluginCount(
+        RecordSnapshot record,
+        IDictionary<ModKey, int> perOriginPlugin)
+    {
+        perOriginPlugin.TryGetValue(
+            record.FormKey.ModKey,
+            out int currentCount);
+        perOriginPlugin[record.FormKey.ModKey] = currentCount + 1;
     }
 
     private static RecordPlanSummary PlanFlags(

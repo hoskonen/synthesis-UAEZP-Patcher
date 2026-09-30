@@ -6,6 +6,7 @@ It scans the winning records in the load order and can:
 
 - assign one of UAEZP's nine dummy encounter zones to `CELL` records that currently lack `XEZN`;
 - assign a dummy encounter zone to `WRLD` records that currently lack `XEZN`;
+- optionally restore earlier encounter-zone assignments that an FWMF-family winning override removed;
 - add `Disable Combat Boundary` to `ECZN` records while preserving their existing flags and data.
 
 Existing encounter-zone links are preserved, including non-null links that cannot currently be resolved. Deleted winning records are skipped. Changes are written as minimal overrides based on the winning record, so downstream lighting, water, overhaul, and compatibility changes are retained.
@@ -59,6 +60,7 @@ UAEZP-Patcher.esp
 | **Assign Missing Cell Encounter Zones** | `true` | Assigns a UAEZP dummy zone to winning CELL records whose `XEZN` is null. |
 | **Assign Missing Worldspace Encounter Zones** | `true` | Assigns a UAEZP dummy zone to winning WRLD records whose `XEZN` is null. |
 | **Disable Combat Boundaries** | `true` | Adds `Disable Combat Boundary` to winning ECZN records that do not already have it. |
+| **Forward encounter zones through FWMF** | `false` | When the actual winning CELL or WRLD override comes from an FWMF-family plugin and has an empty `XEZN`, restores the nearest earlier resolvable, non-deleted assignment. |
 | **Dummy Zone Mode** | `DeterministicRandom` | Selects how missing CELL/WRLD links are assigned. `DeterministicRandom` produces a stable per-record selection using **Seed**. `First` always selects `DummyEncounterZone0`. |
 | **Seed** | `38174` | Controls `DeterministicRandom` assignment. The same seed, load order, and settings reproduce the same assignments. |
 | **Dry Run** | `true` | Performs discovery, validation, planning, and reporting without creating functional Skyrim overrides. Disable only after reviewing the report. |
@@ -69,6 +71,8 @@ The patcher operates on the winning records visible to Synthesis at execution ti
 
 - Existing CELL and WRLD `XEZN` values are never replaced.
 - Non-null unresolved `XEZN` links are treated as existing and preserved.
+- FWMF forwarding is opt-in and checks the plugin that supplied the actual winning override, not merely whether FWMF appears somewhere in the load order.
+- For an eligible empty-XEZN FWMF winner, the nearest earlier valid assignment is restored. If none exists, that record is left unchanged rather than receiving a random fallback assignment.
 - Deleted winning records are not overridden or resurrected.
 - ECZN flags and unrelated data are preserved when `Disable Combat Boundary` is added.
 - Exterior CELL overrides contain only the required WRLD/block/sub-block structure and target CELL header; sibling cells and persistent/temporary child records are not copied.
@@ -87,7 +91,7 @@ Exact assignments are not expected to match the original Pascal script, which us
 
 ## Reports
 
-Dry Run reports the selected Easy or Hard source, algorithm and seed, all nine dummy-zone identities, CELL/WRLD/ECZN scan and eligibility counts, deleted skips, planned totals, assignment distribution, and compact origin-plugin and provenance diagnostics.
+Dry Run reports the selected Easy or Hard source, algorithm and seed, all nine dummy-zone identities, CELL/WRLD/ECZN scan and eligibility counts, deleted skips, planned totals, separate CELL/WRLD FWMF forward counts, assignment distribution, and compact origin-plugin and provenance diagnostics.
 
 The provenance section is intentionally retained for the initial release because it is useful when diagnosing pre-existing encounter-zone state. Its plugin breakdowns and example lists are capped to avoid per-record log spam.
 

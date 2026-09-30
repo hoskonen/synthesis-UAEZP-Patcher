@@ -48,6 +48,7 @@ public sealed record RecordSnapshot(
 {
     public FormKey? EncounterZoneTarget { get; init; }
     public string? ResolvedEncounterZoneEditorId { get; init; }
+    public FormKey? EarlierResolvableEncounterZoneTarget { get; init; }
 }
 
 public sealed record ExistingLinkSample(
@@ -76,7 +77,22 @@ public sealed record ExistingStateProvenance(
 
 public sealed record PlannedChange(
     RecordSnapshot Target,
-    ValidatedDummyZone? AssignedDummyZone);
+    ValidatedDummyZone? AssignedDummyZone)
+{
+    public FormKey? ForwardedEncounterZone { get; init; }
+
+    public FormKey? EncounterZoneToWrite =>
+        ForwardedEncounterZone ?? AssignedDummyZone?.FormKey;
+
+    public bool IsFwmfForward => ForwardedEncounterZone is not null;
+}
+
+public sealed record FwmfForwardCounts(
+    int Cells,
+    int Worldspaces)
+{
+    public int Total => Cells + Worldspaces;
+}
 
 public sealed record ApplyContextCatalog(
     IReadOnlyDictionary<FormKey, Func<ISkyrimMod, ICell>> Cells,
@@ -88,6 +104,9 @@ public sealed record ApplyResult(
     int WorldspacesApplied,
     int EncounterZonesApplied)
 {
+    public int CellsForwardedThroughFwmf { get; init; }
+    public int WorldspacesForwardedThroughFwmf { get; init; }
+
     public int TotalApplied =>
         CellsApplied + WorldspacesApplied + EncounterZonesApplied;
 }
@@ -109,12 +128,14 @@ public sealed record PatchPlan(
     IReadOnlyDictionary<ModKey, int> CellAndWorldspaceChangesByOriginPlugin)
 {
     public required ExistingStateProvenance ExistingStateProvenance { get; init; }
+    public FwmfForwardCounts FwmfForwards { get; init; } = new(0, 0);
 
     public int TotalPlannedOverrides =>
         Cells.PlannedOverrides + Worldspaces.PlannedOverrides + EncounterZones.PlannedOverrides;
 
     public int TotalDummyAssignments =>
-        Cells.PlannedOverrides + Worldspaces.PlannedOverrides;
+        Cells.PlannedOverrides + Worldspaces.PlannedOverrides -
+        FwmfForwards.Total;
 }
 
 public sealed record PlanningRun(

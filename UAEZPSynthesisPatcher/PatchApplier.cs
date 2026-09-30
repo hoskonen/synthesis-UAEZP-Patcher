@@ -20,6 +20,8 @@ public static class PatchApplier
         int cellsApplied = 0;
         int worldspacesApplied = 0;
         int encounterZonesApplied = 0;
+        int cellsForwardedThroughFwmf = 0;
+        int worldspacesForwardedThroughFwmf = 0;
 
         foreach (PlannedChange change in run.Plan.Changes)
         {
@@ -30,10 +32,18 @@ public static class PatchApplier
                     case PlannedRecordType.Cell:
                         ApplyCell(patchMod, contexts, change);
                         cellsApplied++;
+                        if (change.IsFwmfForward)
+                        {
+                            cellsForwardedThroughFwmf++;
+                        }
                         break;
                     case PlannedRecordType.Worldspace:
                         ApplyWorldspace(patchMod, contexts, change);
                         worldspacesApplied++;
+                        if (change.IsFwmfForward)
+                        {
+                            worldspacesForwardedThroughFwmf++;
+                        }
                         break;
                     case PlannedRecordType.EncounterZone:
                         ApplyEncounterZone(patchMod, contexts, change);
@@ -62,7 +72,12 @@ public static class PatchApplier
         var result = new ApplyResult(
             cellsApplied,
             worldspacesApplied,
-            encounterZonesApplied);
+            encounterZonesApplied)
+        {
+            CellsForwardedThroughFwmf = cellsForwardedThroughFwmf,
+            WorldspacesForwardedThroughFwmf =
+                worldspacesForwardedThroughFwmf,
+        };
         VerifyCounts(run.Plan, result);
         VerifyPlannedTargetsExist(patchMod, run.Plan);
         return result;
@@ -108,13 +123,17 @@ public static class PatchApplier
                     $"{change.Target.RecordType} {change.Target.FormKey}.");
             }
 
-            bool needsDummy = change.Target.RecordType is
+            bool needsEncounterZone = change.Target.RecordType is
                 PlannedRecordType.Cell or PlannedRecordType.Worldspace;
-            if (needsDummy != (change.AssignedDummyZone is not null))
+            bool hasDummy = change.AssignedDummyZone is not null;
+            bool hasForward = change.ForwardedEncounterZone is not null;
+            if (needsEncounterZone != (hasDummy || hasForward) ||
+                (hasDummy && hasForward) ||
+                (hasForward && change.ForwardedEncounterZone!.Value.IsNull))
             {
                 throw new InvalidOperationException(
                     $"Planned {change.Target.RecordType} {change.Target.FormKey} " +
-                    "has inconsistent dummy-zone assignment data.");
+                    "has inconsistent encounter-zone assignment data.");
             }
         }
     }
@@ -124,13 +143,13 @@ public static class PatchApplier
         ApplyContextCatalog contexts,
         PlannedChange change)
     {
-        ValidatedDummyZone assigned = change.AssignedDummyZone!;
+        FormKey assigned = change.EncounterZoneToWrite!.Value;
         ICell target = contexts.Cells[change.Target.FormKey](patchMod);
         VerifyTargetIdentity(target.FormKey, change);
 
         SetEncounterZone(
             target.EncounterZone,
-            assigned.FormKey,
+            assigned,
             change.Target.RecordType,
             change.Target.FormKey);
     }
@@ -140,14 +159,14 @@ public static class PatchApplier
         ApplyContextCatalog contexts,
         PlannedChange change)
     {
-        ValidatedDummyZone assigned = change.AssignedDummyZone!;
+        FormKey assigned = change.EncounterZoneToWrite!.Value;
         IWorldspace target =
             contexts.Worldspaces[change.Target.FormKey](patchMod);
         VerifyTargetIdentity(target.FormKey, change);
 
         SetEncounterZone(
             target.EncounterZone,
-            assigned.FormKey,
+            assigned,
             change.Target.RecordType,
             change.Target.FormKey);
     }
@@ -216,6 +235,9 @@ public static class PatchApplier
             result.WorldspacesApplied != plan.Worldspaces.PlannedOverrides ||
             result.EncounterZonesApplied !=
                 plan.EncounterZones.PlannedOverrides ||
+            result.CellsForwardedThroughFwmf != plan.FwmfForwards.Cells ||
+            result.WorldspacesForwardedThroughFwmf !=
+                plan.FwmfForwards.Worldspaces ||
             result.TotalApplied != plan.TotalPlannedOverrides)
         {
             throw new InvalidOperationException(
@@ -224,7 +246,13 @@ public static class PatchApplier
                 $"WRLD {result.WorldspacesApplied}/" +
                 $"{plan.Worldspaces.PlannedOverrides}, " +
                 $"ECZN {result.EncounterZonesApplied}/" +
-                $"{plan.EncounterZones.PlannedOverrides}.");
+                $"{plan.EncounterZones.PlannedOverrides}, " +
+                $"FWMF CELL forwards " +
+                $"{result.CellsForwardedThroughFwmf}/" +
+                $"{plan.FwmfForwards.Cells}, " +
+                $"FWMF WRLD forwards " +
+                $"{result.WorldspacesForwardedThroughFwmf}/" +
+                $"{plan.FwmfForwards.Worldspaces}.");
         }
     }
 
