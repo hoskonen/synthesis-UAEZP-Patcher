@@ -45,10 +45,33 @@ UAEZP-Patcher.esp
 ```
 
 For FWMF compatibility, add the same patcher a second time in a later Synthesis
-group named `UAEZP-FWMF-Patch`. In that group, enable only **Forward encounter
-zones through FWMF**: disable both **Assign Missing...** settings and **Disable
-Combat Boundaries**. Synthesis creates the separate group output; the patcher
-does not create or name a second plugin itself.
+group named `UAEZP-FWMF-Patch`. Synthesis creates the separate group output; the
+patcher does not create or name a second plugin itself.
+
+### Normal UAEZP group
+
+```text
+Assign Missing Cell Encounter Zones       ON
+Assign Missing Worldspace Encounter Zones ON
+Disable Combat Boundaries                 ON
+Forward encounter zones through FWMF      OFF
+```
+
+This group performs normal UAEZP assignment and encounter-zone behavior
+patching. Its defaults already match this configuration.
+
+### Late FWMF compatibility group
+
+```text
+Assign Missing Cell Encounter Zones       OFF
+Assign Missing Worldspace Encounter Zones OFF
+Disable Combat Boundaries                 OFF
+Forward encounter zones through FWMF      ON
+```
+
+Place this group after FWMF and its compatibility patches. It writes only the
+CELL and WRLD overrides whose winning FWMF-family record removed a valid earlier
+`XEZN`.
 
 ## Recommended workflow
 
@@ -78,12 +101,29 @@ The patcher operates on the winning records visible to Synthesis at execution ti
 - Existing CELL and WRLD `XEZN` values are never replaced.
 - Non-null unresolved `XEZN` links are treated as existing and preserved.
 - FWMF forwarding is opt-in and checks the plugin that supplied the actual winning override, not merely whether FWMF appears somewhere in the load order.
-- For an eligible empty-XEZN FWMF winner, the nearest earlier valid assignment is restored. If none exists, forwarding does nothing; normal dummy assignment still applies only when the corresponding `AssignMissing...` option is enabled.
+- A successful FWMF forward wins over dummy assignment for that record.
+- If no earlier valid `XEZN` exists and the corresponding normal `Assign Missing...` option is enabled, dummy assignment may still occur.
+- In forwarding-only mode, no earlier valid `XEZN` means no override is written.
 - Deleted winning records are not overridden or resurrected.
 - ECZN flags and unrelated data are preserved when `Disable Combat Boundary` is added.
 - Exterior CELL overrides contain only the required WRLD/block/sub-block structure and target CELL header; sibling cells and persistent/temporary child records are not copied.
 
-The generated plugin should normally be late in the Synthesis patching and load-order chain so later generated plugins do not discard its additions. Compatibility ultimately depends on the behavior and ordering of every plugin in a particular load order.
+The recommended generated-plugin order for the two-group FWMF workflow is:
+
+```text
+...
+Synthesis.esp
+DynDOLOD.esp
+Occlusion.esp
+FWMF for Fantasy Paper Maps.esp
+FWMF compatibility patches
+Late UAEZP-FWMF-Patch.esp
+```
+
+The normal UAEZP group runs earlier, while the dedicated compatibility group
+runs late enough to see the actual winning FWMF or FWMF-patch records.
+Compatibility ultimately depends on the behavior and ordering of every plugin
+in a particular load order.
 
 No cell types, EditorIDs, or origin plugins are excluded.
 
