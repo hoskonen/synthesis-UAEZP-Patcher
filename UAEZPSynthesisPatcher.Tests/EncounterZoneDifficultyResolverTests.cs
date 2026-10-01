@@ -85,19 +85,17 @@ public sealed class EncounterZoneDifficultyResolverTests
     }
 
     [TestMethod]
-    public void ExplicitProfileMustMatchExistingSourceRecords()
+    public void ExplicitProfileMayDifferFromExistingSourceRecords()
     {
         ValidatedSourcePlugin hardSource =
             SourcePluginValidator.Validate([TestData.HardSource()]);
 
-        InvalidOperationException error =
-            Assert.ThrowsExactly<InvalidOperationException>(() =>
-                EncounterZoneDifficultyResolver.Resolve(
-                    EncounterZoneDifficultyProfileSelection.UAEZPEasy,
-                    hardSource));
+        EncounterZoneDifficultyProfile profile =
+            EncounterZoneDifficultyResolver.Resolve(
+                EncounterZoneDifficultyProfileSelection.UAEZPEasy,
+                hardSource);
 
-        StringAssert.Contains(error.Message, "does not match");
-        StringAssert.Contains(error.Message, "does not generate ECZN level overrides");
+        Assert.AreSame(EncounterZoneDifficultyResolver.Easy, profile);
     }
 
     [TestMethod]

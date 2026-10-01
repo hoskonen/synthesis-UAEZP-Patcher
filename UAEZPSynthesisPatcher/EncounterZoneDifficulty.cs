@@ -48,9 +48,19 @@ public static class EncounterZoneDifficultyResolver
         ValidatedSourcePlugin source)
     {
         ArgumentNullException.ThrowIfNull(source);
+        return Resolve(
+            selection,
+            source.DummyZones.Select(zone => zone.MinLevel));
+    }
+
+    public static EncounterZoneDifficultyProfile Resolve(
+        EncounterZoneDifficultyProfileSelection selection,
+        IEnumerable<byte> sourceMinimumLevels)
+    {
+        ArgumentNullException.ThrowIfNull(sourceMinimumLevels);
 
         EncounterZoneDifficultyProfile sourceProfile = MatchValidatedSource(
-            source.DummyZones.Select(zone => zone.MinLevel));
+            sourceMinimumLevels);
         EncounterZoneDifficultyProfile selected = selection switch
         {
             EncounterZoneDifficultyProfileSelection.MatchValidatedSource =>
@@ -64,16 +74,6 @@ public static class EncounterZoneDifficultyResolver
             _ => throw new InvalidOperationException(
                 $"Unsupported difficulty profile value: {(int)selection}."),
         };
-
-        if (!selected.Tiers.Select(tier => tier.MinimumLevel)
-            .SequenceEqual(sourceProfile.Tiers.Select(tier => tier.MinimumLevel)))
-        {
-            throw new InvalidOperationException(
-                $"Difficulty profile '{selected.DisplayName}' does not match " +
-                $"the validated {sourceProfile.DisplayName} source records. " +
-                "This version references existing UAEZP encounter zones and " +
-                "does not generate ECZN level overrides.");
-        }
 
         return selected;
     }

@@ -109,7 +109,10 @@ public static class StatePlanner
                 context.ModKey,
                 context.Record.IsDeleted,
                 context.Record.Flags.HasFlag(
-                    EncounterZone.Flag.DisableCombatBoundary)))
+                    EncounterZone.Flag.DisableCombatBoundary))
+            {
+                EncounterZoneMinimumLevel = context.Record.MinLevel,
+            })
             .ToList();
 
         PatchPlan plan = ReadOnlyPlanner.Build(
@@ -117,7 +120,8 @@ public static class StatePlanner
             source.DummyZones,
             cells,
             worldspaces,
-            encounterZones);
+            encounterZones,
+            difficultyProfile);
 
         var applyContexts = new ApplyContextCatalog(
             cellContexts.ToDictionary(

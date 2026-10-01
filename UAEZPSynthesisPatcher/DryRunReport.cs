@@ -68,6 +68,15 @@ public static class DryRunReport
         text.AppendLine($"  Total: {run.Plan.FwmfForwards.Total}");
         text.AppendLine();
 
+        text.AppendLine("ECZN difficulty changes:");
+        text.AppendLine(
+            $"  Planned: {run.Plan.EncounterZoneDifficultyChanges}");
+        text.AppendLine();
+
+        text.AppendLine("ECZN combat-boundary changes:");
+        text.AppendLine($"  Planned: {run.Plan.CombatBoundaryChanges}");
+        text.AppendLine();
+
         text.AppendLine("Dummy-zone assignment distribution:");
         foreach (ValidatedDummyZone zone in run.SourcePlugin.DummyZones)
         {

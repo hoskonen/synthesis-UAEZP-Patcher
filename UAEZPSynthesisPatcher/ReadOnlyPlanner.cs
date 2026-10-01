@@ -9,7 +9,8 @@ public static class ReadOnlyPlanner
         IReadOnlyList<ValidatedDummyZone> orderedZones,
         IEnumerable<RecordSnapshot> cells,
         IEnumerable<RecordSnapshot> worldspaces,
-        IEnumerable<RecordSnapshot> encounterZones)
+        IEnumerable<RecordSnapshot> encounterZones,
+        EncounterZoneDifficultyProfile? difficultyProfile = null)
     {
         SettingsValidator.Validate(settings);
         ArgumentNullException.ThrowIfNull(orderedZones);
@@ -17,6 +18,9 @@ public static class ReadOnlyPlanner
         List<RecordSnapshot> cellRecords = cells.ToList();
         List<RecordSnapshot> worldspaceRecords = worldspaces.ToList();
         List<RecordSnapshot> encounterZoneRecords = encounterZones.ToList();
+        difficultyProfile ??= EncounterZoneDifficultyResolver.Resolve(
+            settings.DifficultyProfile,
+            orderedZones.Select(zone => zone.MinLevel));
 
         ExistingStateProvenance provenance = ProvenanceAnalyzer.Analyze(
             orderedZones,
@@ -52,10 +56,15 @@ public static class ReadOnlyPlanner
             perOriginPlugin,
             ref forwardedWorldspaces);
 
-        RecordPlanSummary encounterZoneSummary = PlanFlags(
-            settings.DisableCombatBoundaries,
+        IReadOnlyDictionary<FormKey, byte> desiredMinimumLevels =
+            BuildDesiredMinimumLevels(orderedZones, difficultyProfile);
+        RecordPlanSummary encounterZoneSummary = PlanEncounterZones(
+            settings,
             encounterZoneRecords,
-            changes);
+            desiredMinimumLevels,
+            changes,
+            out int difficultyChanges,
+            out int combatBoundaryChanges);
 
         var plan = new PatchPlan(
             cellSummary,
@@ -69,6 +78,9 @@ public static class ReadOnlyPlanner
             FwmfForwards = new FwmfForwardCounts(
                 forwardedCells,
                 forwardedWorldspaces),
+            DifficultyProfileDisplayName = difficultyProfile.DisplayName,
+            EncounterZoneDifficultyChanges = difficultyChanges,
+            CombatBoundaryChanges = combatBoundaryChanges,
         };
 
         ValidateInternalConsistency(plan);
@@ -170,16 +182,23 @@ public static class ReadOnlyPlanner
         perOriginPlugin[record.FormKey.ModKey] = currentCount + 1;
     }
 
-    private static RecordPlanSummary PlanFlags(
-        bool enabled,
+    private static RecordPlanSummary PlanEncounterZones(
+        Settings settings,
         IEnumerable<RecordSnapshot> records,
-        ICollection<PlannedChange> changes)
+        IReadOnlyDictionary<FormKey, byte> desiredMinimumLevels,
+        ICollection<PlannedChange> changes,
+        out int difficultyChanges,
+        out int combatBoundaryChanges)
     {
         int scanned = 0;
         int missing = 0;
         int existing = 0;
         int deleted = 0;
         int planned = 0;
+        difficultyChanges = 0;
+        combatBoundaryChanges = 0;
+        bool applyDifficulty = settings.DifficultyProfile !=
+            EncounterZoneDifficultyProfileSelection.MatchValidatedSource;
 
         foreach (RecordSnapshot record in records)
         {
@@ -195,20 +214,75 @@ public static class ReadOnlyPlanner
             if (record.RequirementSatisfied)
             {
                 existing++;
-                continue;
+            }
+            else
+            {
+                missing++;
             }
 
-            missing++;
-            if (!enabled)
+            bool addCombatBoundary =
+                settings.DisableCombatBoundaries &&
+                !record.RequirementSatisfied;
+            byte? desiredMinimumLevel = null;
+            if (applyDifficulty &&
+                desiredMinimumLevels.TryGetValue(
+                    record.FormKey,
+                    out byte desired))
+            {
+                byte existingMinimumLevel =
+                    record.EncounterZoneMinimumLevel ??
+                    throw new InvalidOperationException(
+                        $"Dummy ECZN {record.FormKey} has no captured MinLevel.");
+                if (existingMinimumLevel != desired)
+                {
+                    desiredMinimumLevel = desired;
+                }
+            }
+
+            if (!addCombatBoundary && desiredMinimumLevel is null)
             {
                 continue;
             }
 
-            changes.Add(new PlannedChange(record, null));
+            changes.Add(new PlannedChange(record, null)
+            {
+                AddDisableCombatBoundary = addCombatBoundary,
+                DesiredEncounterZoneMinimumLevel = desiredMinimumLevel,
+            });
+            if (addCombatBoundary)
+            {
+                combatBoundaryChanges++;
+            }
+            if (desiredMinimumLevel is not null)
+            {
+                difficultyChanges++;
+            }
             planned++;
         }
 
         return new RecordPlanSummary(scanned, missing, existing, deleted, 0, planned);
+    }
+
+    private static IReadOnlyDictionary<FormKey, byte> BuildDesiredMinimumLevels(
+        IReadOnlyList<ValidatedDummyZone> orderedZones,
+        EncounterZoneDifficultyProfile difficultyProfile)
+    {
+        if (orderedZones.Count != EncounterZoneDifficultyResolver.TierCount ||
+            difficultyProfile.Tiers.Count !=
+                EncounterZoneDifficultyResolver.TierCount)
+        {
+            throw new InvalidOperationException(
+                "Difficulty planning requires exactly nine ordered dummy zones " +
+                "and nine difficulty tiers.");
+        }
+
+        return orderedZones
+            .Select((zone, index) => new
+            {
+                zone.FormKey,
+                MinimumLevel = difficultyProfile.Tiers[index].MinimumLevel,
+            })
+            .ToDictionary(item => item.FormKey, item => item.MinimumLevel);
     }
 
     private static void EnsureRecordType(
@@ -238,6 +312,21 @@ public static class ReadOnlyPlanner
             throw new InvalidOperationException(
                 $"Internal planning error: {plan.Changes.Count} changes were " +
                 $"captured, expected {plan.TotalPlannedOverrides}.");
+        }
+
+        int difficultyChanges = plan.Changes.Count(change =>
+            change.DesiredEncounterZoneMinimumLevel is not null);
+        int combatBoundaryChanges = plan.Changes.Count(change =>
+            change.AddDisableCombatBoundary);
+        int encounterZoneChanges = plan.Changes.Count(change =>
+            change.Target.RecordType == PlannedRecordType.EncounterZone);
+        if (difficultyChanges != plan.EncounterZoneDifficultyChanges ||
+            combatBoundaryChanges != plan.CombatBoundaryChanges ||
+            encounterZoneChanges != plan.EncounterZones.PlannedOverrides)
+        {
+            throw new InvalidOperationException(
+                "Internal planning error: ECZN intent counts do not match " +
+                "the captured changes.");
         }
     }
 }

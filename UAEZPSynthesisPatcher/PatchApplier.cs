@@ -20,6 +20,8 @@ public static class PatchApplier
         int cellsApplied = 0;
         int worldspacesApplied = 0;
         int encounterZonesApplied = 0;
+        int encounterZoneDifficultyChangesApplied = 0;
+        int combatBoundaryChangesApplied = 0;
         int cellsForwardedThroughFwmf = 0;
         int worldspacesForwardedThroughFwmf = 0;
 
@@ -48,6 +50,14 @@ public static class PatchApplier
                     case PlannedRecordType.EncounterZone:
                         ApplyEncounterZone(patchMod, contexts, change);
                         encounterZonesApplied++;
+                        if (change.DesiredEncounterZoneMinimumLevel is not null)
+                        {
+                            encounterZoneDifficultyChangesApplied++;
+                        }
+                        if (change.AddDisableCombatBoundary)
+                        {
+                            combatBoundaryChangesApplied++;
+                        }
                         break;
                     default:
                         throw new InvalidOperationException(
@@ -77,6 +87,9 @@ public static class PatchApplier
             CellsForwardedThroughFwmf = cellsForwardedThroughFwmf,
             WorldspacesForwardedThroughFwmf =
                 worldspacesForwardedThroughFwmf,
+            EncounterZoneDifficultyChangesApplied =
+                encounterZoneDifficultyChangesApplied,
+            CombatBoundaryChangesApplied = combatBoundaryChangesApplied,
         };
         VerifyCounts(run.Plan, result);
         VerifyPlannedTargetsExist(patchMod, run.Plan);
@@ -98,7 +111,7 @@ public static class PatchApplier
                     $"{change.Target.FormKey}.");
             }
 
-            if (change.Target.IsDeleted || change.Target.RequirementSatisfied)
+            if (change.Target.IsDeleted)
             {
                 throw new InvalidOperationException(
                     $"Plan contains an ineligible {change.Target.RecordType} " +
@@ -134,6 +147,39 @@ public static class PatchApplier
                 throw new InvalidOperationException(
                     $"Planned {change.Target.RecordType} {change.Target.FormKey} " +
                     "has inconsistent encounter-zone assignment data.");
+            }
+
+            if (change.Target.RecordType == PlannedRecordType.EncounterZone)
+            {
+                bool hasDifficulty =
+                    change.DesiredEncounterZoneMinimumLevel is not null;
+                if ((!change.AddDisableCombatBoundary && !hasDifficulty) ||
+                    change.AssignedDummyZone is not null ||
+                    change.ForwardedEncounterZone is not null ||
+                    (change.AddDisableCombatBoundary &&
+                     change.Target.RequirementSatisfied) ||
+                    (hasDifficulty &&
+                     (change.Target.EncounterZoneMinimumLevel is null ||
+                      change.Target.EncounterZoneMinimumLevel ==
+                          change.DesiredEncounterZoneMinimumLevel)))
+                {
+                    throw new InvalidOperationException(
+                        $"Planned EncounterZone {change.Target.FormKey} " +
+                        "has inconsistent ECZN mutation data.");
+                }
+            }
+            else if (change.Target.RequirementSatisfied)
+            {
+                throw new InvalidOperationException(
+                    $"Plan contains an ineligible {change.Target.RecordType} " +
+                    $"target {change.Target.FormKey}.");
+            }
+            else if (change.AddDisableCombatBoundary ||
+                     change.DesiredEncounterZoneMinimumLevel is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Planned {change.Target.RecordType} " +
+                    $"{change.Target.FormKey} contains ECZN mutation data.");
             }
         }
     }
@@ -180,13 +226,27 @@ public static class PatchApplier
             contexts.EncounterZones[change.Target.FormKey](patchMod);
         VerifyTargetIdentity(target.FormKey, change);
 
-        target.Flags |= EncounterZone.Flag.DisableCombatBoundary;
-        if (!target.Flags.HasFlag(
-                EncounterZone.Flag.DisableCombatBoundary))
+        if (change.AddDisableCombatBoundary)
         {
-            throw new InvalidOperationException(
-                $"ECZN {change.Target.FormKey} did not retain " +
-                "Disable Combat Boundary after mutation.");
+            target.Flags |= EncounterZone.Flag.DisableCombatBoundary;
+            if (!target.Flags.HasFlag(
+                    EncounterZone.Flag.DisableCombatBoundary))
+            {
+                throw new InvalidOperationException(
+                    $"ECZN {change.Target.FormKey} did not retain " +
+                    "Disable Combat Boundary after mutation.");
+            }
+        }
+
+        if (change.DesiredEncounterZoneMinimumLevel is byte desiredMinLevel)
+        {
+            target.MinLevel = desiredMinLevel;
+            if (target.MinLevel != desiredMinLevel)
+            {
+                throw new InvalidOperationException(
+                    $"ECZN {change.Target.FormKey} has MinLevel " +
+                    $"{target.MinLevel}, expected {desiredMinLevel}.");
+            }
         }
     }
 
@@ -238,6 +298,10 @@ public static class PatchApplier
             result.CellsForwardedThroughFwmf != plan.FwmfForwards.Cells ||
             result.WorldspacesForwardedThroughFwmf !=
                 plan.FwmfForwards.Worldspaces ||
+            result.EncounterZoneDifficultyChangesApplied !=
+                plan.EncounterZoneDifficultyChanges ||
+            result.CombatBoundaryChangesApplied !=
+                plan.CombatBoundaryChanges ||
             result.TotalApplied != plan.TotalPlannedOverrides)
         {
             throw new InvalidOperationException(
@@ -252,7 +316,12 @@ public static class PatchApplier
                 $"{plan.FwmfForwards.Cells}, " +
                 $"FWMF WRLD forwards " +
                 $"{result.WorldspacesForwardedThroughFwmf}/" +
-                $"{plan.FwmfForwards.Worldspaces}.");
+                $"{plan.FwmfForwards.Worldspaces}, " +
+                $"ECZN difficulty " +
+                $"{result.EncounterZoneDifficultyChangesApplied}/" +
+                $"{plan.EncounterZoneDifficultyChanges}, " +
+                $"combat boundary {result.CombatBoundaryChangesApplied}/" +
+                $"{plan.CombatBoundaryChanges}.");
         }
     }
 

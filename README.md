@@ -7,7 +7,9 @@ It scans the winning records in the load order and can:
 - assign one of UAEZP's nine dummy encounter zones to `CELL` records that currently lack `XEZN`;
 - assign a dummy encounter zone to `WRLD` records that currently lack `XEZN`;
 - optionally restore earlier encounter-zone assignments that an FWMF-family winning override removed;
-- add `Disable Combat Boundary` to `ECZN` records while preserving their existing flags and data.
+- apply an explicit Easy/Hard profile to the nine validated dummy `ECZN`
+  `MinLevel` values, and add `Disable Combat Boundary` when enabled, while
+  preserving unrelated winning-record data and flags.
 
 Existing encounter-zone links are preserved, including non-null links that cannot currently be resolved. Deleted winning records are skipped. Changes are written as minimal overrides based on the winning record, so downstream lighting, water, overhaul, and compatibility changes are retained.
 
@@ -80,7 +82,7 @@ CELL and WRLD overrides whose winning FWMF-family record removed a valid earlier
 3. Inspect the report for the detected source variant, validated dummy zones, scan counts, and planned changes.
 4. Disable **Dry Run** without changing the other settings.
 5. Run the same group again to create the overrides.
-6. Optionally inspect the generated plugin in xEdit. For modified CELL and WRLD records, `XEZN` should be the only intentional field addition. For ECZN records, `Disable Combat Boundary` should be the only intentional flag addition.
+6. Optionally inspect the generated plugin in xEdit. For modified CELL and WRLD records, `XEZN` should be the only intentional field addition. For ECZN records, the only intentional changes are the selected profile's `MinLevel` and, when enabled, the `Disable Combat Boundary` flag.
 
 ## Settings
 
@@ -109,10 +111,13 @@ The predefined **UAEZP Easy** profile uses minimum levels `3, 5, 7, 9, 11,
 50`. **Match Validated Source** is the compatibility-safe default and resolves
 to whichever of those schemas is present in the active `UAEZP.esp`.
 
-This release does not rewrite the nine source ECZN records. An explicitly
-selected Easy or Hard profile must therefore match the installed source
-variant. **Custom** is reserved for a follow-up that can supply and apply custom
-tier data; selecting it now produces a clear validation error.
+**Match Validated Source** does not emit ECZN overrides solely for difficulty.
+Selecting **UAEZP Easy** or **UAEZP Hard** applies that profile to the nine
+validated dummy zones through minimal overrides in the Synthesis output plugin;
+`UAEZP.esp` itself is never modified. Only differing `MinLevel` values are
+changed, and unrelated winning ECZN data and flags are preserved. **Custom** is
+reserved for a follow-up that can supply custom tier data; selecting it now
+produces a clear validation error.
 
 Changing the difficulty-profile setting does not participate in zone selection.
 `DeterministicRandom` and `First` continue selecting from the same FormKey-sorted
@@ -162,7 +167,8 @@ Exact assignments are not expected to match the original Pascal script, which us
 ## Reports
 
 Dry Run reports the selected Easy or Hard source, active difficulty profile,
-algorithm and seed, all nine dummy-zone identities, CELL/WRLD/ECZN scan and
+difficulty and combat-boundary change counts, algorithm and seed, all nine
+dummy-zone identities, CELL/WRLD/ECZN scan and
 eligibility counts, deleted skips, planned totals, separate CELL/WRLD FWMF
 forward counts, assignment distribution, and compact origin-plugin and
 provenance diagnostics.

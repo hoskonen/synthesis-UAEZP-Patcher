@@ -49,6 +49,7 @@ public sealed record RecordSnapshot(
     public FormKey? EncounterZoneTarget { get; init; }
     public string? ResolvedEncounterZoneEditorId { get; init; }
     public FormKey? EarlierResolvableEncounterZoneTarget { get; init; }
+    public byte? EncounterZoneMinimumLevel { get; init; }
 }
 
 public sealed record ExistingLinkSample(
@@ -80,6 +81,8 @@ public sealed record PlannedChange(
     ValidatedDummyZone? AssignedDummyZone)
 {
     public FormKey? ForwardedEncounterZone { get; init; }
+    public bool AddDisableCombatBoundary { get; init; }
+    public byte? DesiredEncounterZoneMinimumLevel { get; init; }
 
     public FormKey? EncounterZoneToWrite =>
         ForwardedEncounterZone ?? AssignedDummyZone?.FormKey;
@@ -106,6 +109,8 @@ public sealed record ApplyResult(
 {
     public int CellsForwardedThroughFwmf { get; init; }
     public int WorldspacesForwardedThroughFwmf { get; init; }
+    public int EncounterZoneDifficultyChangesApplied { get; init; }
+    public int CombatBoundaryChangesApplied { get; init; }
 
     public int TotalApplied =>
         CellsApplied + WorldspacesApplied + EncounterZonesApplied;
@@ -129,6 +134,9 @@ public sealed record PatchPlan(
 {
     public required ExistingStateProvenance ExistingStateProvenance { get; init; }
     public FwmfForwardCounts FwmfForwards { get; init; } = new(0, 0);
+    public string DifficultyProfileDisplayName { get; init; } = string.Empty;
+    public int EncounterZoneDifficultyChanges { get; init; }
+    public int CombatBoundaryChanges { get; init; }
 
     public int TotalPlannedOverrides =>
         Cells.PlannedOverrides + Worldspaces.PlannedOverrides + EncounterZones.PlannedOverrides;

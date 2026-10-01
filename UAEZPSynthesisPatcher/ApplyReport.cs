@@ -14,6 +14,9 @@ public static class ApplyReport
         text.AppendLine(" UAEZP Synthesis Patcher - Apply");
         text.AppendLine("============================================================");
         text.AppendLine();
+        text.AppendLine(
+            $"Difficulty profile: {plan.DifficultyProfileDisplayName}");
+        text.AppendLine();
         text.AppendLine("Planned overrides:");
         text.AppendLine($"  CELL: {plan.Cells.PlannedOverrides}");
         text.AppendLine($"  WRLD: {plan.Worldspaces.PlannedOverrides}");
@@ -39,6 +42,15 @@ public static class ApplyReport
         text.AppendLine(
             $"  Total: " +
             $"{result.CellsForwardedThroughFwmf + result.WorldspacesForwardedThroughFwmf}");
+        text.AppendLine();
+        text.AppendLine("ECZN difficulty changes:");
+        text.AppendLine($"  Planned: {plan.EncounterZoneDifficultyChanges}");
+        text.AppendLine(
+            $"  Applied: {result.EncounterZoneDifficultyChangesApplied}");
+        text.AppendLine();
+        text.AppendLine("ECZN combat-boundary changes:");
+        text.AppendLine($"  Planned: {plan.CombatBoundaryChanges}");
+        text.AppendLine($"  Applied: {result.CombatBoundaryChangesApplied}");
         text.AppendLine();
         text.AppendLine("Apply complete.");
         return text.ToString();

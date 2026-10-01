@@ -640,6 +640,75 @@ public sealed class PatchApplierTests
     }
 
     [TestMethod]
+    public void DifficultyAndCombatBoundaryCombineInOnePreservingOverride()
+    {
+        ValidatedDummyZone firstZone = TestData.ValidatedZones()[0];
+        var source = NewMod("UAEZP.esp");
+        var winning = new EncounterZone(
+            firstZone.FormKey,
+            SkyrimRelease.SkyrimSE)
+        {
+            EditorID = "WinningDummyEncounterZone",
+            MinLevel = 3,
+            MaxLevel = 47,
+            Rank = 4,
+            Flags = EncounterZone.Flag.NeverResets |
+                EncounterZone.Flag.MatchPcBelowMinimumLevel,
+        };
+        source.EncounterZones.Add(winning);
+        EncounterZone.Flag originalFlags = winning.Flags;
+        var snapshot = new RecordSnapshot(
+            PlannedRecordType.EncounterZone,
+            winning.FormKey,
+            winning.EditorID,
+            source.ModKey,
+            false,
+            false)
+        {
+            EncounterZoneMinimumLevel = winning.MinLevel,
+        };
+        var settings = new Settings
+        {
+            DryRun = false,
+            AssignMissingCellEncounterZones = false,
+            AssignMissingWorldspaceEncounterZones = false,
+            DisableCombatBoundaries = true,
+            DifficultyProfile =
+                EncounterZoneDifficultyProfileSelection.UAEZPHard,
+        };
+        var patch = NewMod("Output.esp");
+        PlanningRun run = BuildRun(
+            encounterZones: [snapshot],
+            encounterZoneFactories:
+                new Dictionary<FormKey, Func<ISkyrimMod, IEncounterZone>>
+                {
+                    [winning.FormKey] = output =>
+                        output.EncounterZones.GetOrAddAsOverride(winning),
+                },
+            settings: settings);
+
+        ApplyResult result = PatchApplier.Apply(patch, run);
+        IEncounterZoneGetter applied = patch.EncounterZones.Single();
+
+        Assert.AreEqual(1, patch.EncounterZones.Count);
+        Assert.AreEqual(1, run.Plan.EncounterZones.PlannedOverrides);
+        Assert.AreEqual(1, run.Plan.EncounterZoneDifficultyChanges);
+        Assert.AreEqual(1, run.Plan.CombatBoundaryChanges);
+        Assert.AreEqual(1, result.EncounterZoneDifficultyChangesApplied);
+        Assert.AreEqual(1, result.CombatBoundaryChangesApplied);
+        Assert.AreEqual(10, applied.MinLevel);
+        Assert.AreEqual(47, applied.MaxLevel);
+        Assert.AreEqual(4, applied.Rank);
+        Assert.AreEqual("WinningDummyEncounterZone", applied.EditorID);
+        Assert.AreEqual(
+            originalFlags | EncounterZone.Flag.DisableCombatBoundary,
+            applied.Flags);
+
+        Assert.AreEqual(3, winning.MinLevel);
+        Assert.AreEqual(originalFlags, winning.Flags);
+    }
+
+    [TestMethod]
     public void ExistingCellEncounterZoneCreatesNoOverride()
     {
         AssertNoOverrideForSatisfied(PlannedRecordType.Cell);
