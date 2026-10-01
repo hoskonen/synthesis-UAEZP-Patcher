@@ -50,6 +50,9 @@ public sealed record RecordSnapshot(
     public string? ResolvedEncounterZoneEditorId { get; init; }
     public FormKey? EarlierResolvableEncounterZoneTarget { get; init; }
     public byte? EncounterZoneMinimumLevel { get; init; }
+    public DungeonCategory DungeonCategory { get; init; }
+    public FormKey? LocationFormKey { get; init; }
+    public string? LocationEditorId { get; init; }
 }
 
 public sealed record ExistingLinkSample(
@@ -83,6 +86,10 @@ public sealed record PlannedChange(
     public FormKey? ForwardedEncounterZone { get; init; }
     public bool AddDisableCombatBoundary { get; init; }
     public byte? DesiredEncounterZoneMinimumLevel { get; init; }
+    public int? BaseDummyZoneTier { get; init; }
+    public int DungeonTierModifier { get; init; }
+    public int? FinalDummyZoneTier { get; init; }
+    public bool DungeonTierClampedAtMaximum { get; init; }
 
     public FormKey? EncounterZoneToWrite =>
         ForwardedEncounterZone ?? AssignedDummyZone?.FormKey;
@@ -96,6 +103,11 @@ public sealed record FwmfForwardCounts(
 {
     public int Total => Cells + Worldspaces;
 }
+
+public sealed record DungeonTierBiasSummary(
+    IReadOnlyDictionary<DungeonCategory, int> AssignmentsByCategory,
+    IReadOnlyDictionary<int, int> TierShifts,
+    int ClampedAtMaximum);
 
 public sealed record ApplyContextCatalog(
     IReadOnlyDictionary<FormKey, Func<ISkyrimMod, ICell>> Cells,
@@ -137,6 +149,10 @@ public sealed record PatchPlan(
     public string DifficultyProfileDisplayName { get; init; } = string.Empty;
     public int EncounterZoneDifficultyChanges { get; init; }
     public int CombatBoundaryChanges { get; init; }
+    public DungeonTierBiasSummary DungeonTierBias { get; init; } = new(
+        new Dictionary<DungeonCategory, int>(),
+        new Dictionary<int, int>(),
+        0);
 
     public int TotalPlannedOverrides =>
         Cells.PlannedOverrides + Worldspaces.PlannedOverrides + EncounterZones.PlannedOverrides;

@@ -54,6 +54,10 @@ public static class StatePlanner
         List<RecordSnapshot> cells = cellContexts
             .Select(context =>
             {
+                DungeonCategoryResolution dungeon =
+                    DungeonCategoryResolver.Resolve(
+                        context.Record,
+                        state.LinkCache);
                 RecordSnapshot snapshot = ToEncounterZoneLinkSnapshot(
                     PlannedRecordType.Cell,
                     context.Record,
@@ -62,6 +66,9 @@ public static class StatePlanner
                     state.LinkCache);
                 return snapshot with
                 {
+                    DungeonCategory = dungeon.Category,
+                    LocationFormKey = dungeon.LocationFormKey,
+                    LocationEditorId = dungeon.LocationEditorId,
                     EarlierResolvableEncounterZoneTarget =
                         FindEarlierCellEncounterZone(
                             state,

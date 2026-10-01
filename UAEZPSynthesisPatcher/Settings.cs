@@ -14,6 +14,7 @@ public sealed class Settings
 {
     private EncounterZoneAssignmentSettings _encounterZoneAssignment = new();
     private EncounterZoneDifficultySettings _encounterZoneDifficulty = new();
+    private DungeonDifficultySettings _dungeonDifficulty = new();
     private EncounterZoneBehaviorSettings _encounterZoneBehavior = new();
     private CompatibilitySettings _compatibility = new();
     private TestingSettings _testing = new();
@@ -54,6 +55,17 @@ public sealed class Settings
         {
             _encounterZoneDifficulty = value ?? new();
             _hasCanonicalEncounterZoneDifficulty = true;
+        }
+    }
+
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+    [SynthesisSettingName("Dungeon Difficulty")]
+    public DungeonDifficultySettings DungeonDifficulty
+    {
+        get => _dungeonDifficulty;
+        set
+        {
+            _dungeonDifficulty = value ?? new();
         }
     }
 
@@ -131,6 +143,62 @@ public sealed class Settings
     {
         get => EncounterZoneDifficulty.DifficultyProfile;
         set => EncounterZoneDifficulty.DifficultyProfile = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public bool EnableDungeonTierBias
+    {
+        get => DungeonDifficulty.EnableDungeonTierBias;
+        set => DungeonDifficulty.EnableDungeonTierBias = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public int CaveTierOffset
+    {
+        get => DungeonDifficulty.CaveTierOffset;
+        set => DungeonDifficulty.CaveTierOffset = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public int NordicRuinTierOffset
+    {
+        get => DungeonDifficulty.NordicRuinTierOffset;
+        set => DungeonDifficulty.NordicRuinTierOffset = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public int DwemerRuinTierOffset
+    {
+        get => DungeonDifficulty.DwemerRuinTierOffset;
+        set => DungeonDifficulty.DwemerRuinTierOffset = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public int MineTierOffset
+    {
+        get => DungeonDifficulty.MineTierOffset;
+        set => DungeonDifficulty.MineTierOffset = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public int FortTierOffset
+    {
+        get => DungeonDifficulty.FortTierOffset;
+        set => DungeonDifficulty.FortTierOffset = value;
+    }
+
+    [JsonIgnore]
+    [SynthesisIgnoreSetting]
+    public int OtherDungeonTierOffset
+    {
+        get => DungeonDifficulty.OtherDungeonTierOffset;
+        set => DungeonDifficulty.OtherDungeonTierOffset = value;
     }
 
     [JsonIgnore]
@@ -285,6 +353,33 @@ public sealed class EncounterZoneBehaviorSettings
     public bool DisableCombatBoundaries { get; set; } = true;
 }
 
+public sealed class DungeonDifficultySettings
+{
+    [SynthesisSettingName("Enable Dungeon Tier Bias")]
+    [SynthesisTooltip(
+        "Raises the selected UAEZP dummy-zone tier for classified interior " +
+        "dungeons. Existing XEZN assignments are never shifted.")]
+    public bool EnableDungeonTierBias { get; set; }
+
+    [SynthesisSettingName("Cave Tier Offset")]
+    public int CaveTierOffset { get; set; } = 1;
+
+    [SynthesisSettingName("Nordic Ruin Tier Offset")]
+    public int NordicRuinTierOffset { get; set; } = 1;
+
+    [SynthesisSettingName("Dwemer Ruin Tier Offset")]
+    public int DwemerRuinTierOffset { get; set; } = 1;
+
+    [SynthesisSettingName("Mine Tier Offset")]
+    public int MineTierOffset { get; set; } = 1;
+
+    [SynthesisSettingName("Fort Tier Offset")]
+    public int FortTierOffset { get; set; }
+
+    [SynthesisSettingName("Other Dungeon Tier Offset")]
+    public int OtherDungeonTierOffset { get; set; }
+}
+
 public sealed class EncounterZoneDifficultySettings
 {
     [SynthesisSettingName("Difficulty Profile")]
@@ -339,6 +434,21 @@ public static class SettingsValidator
             throw new InvalidOperationException(
                 "Custom difficulty profile data is not configured. Use Match " +
                 "Validated Source, UAEZP Easy, or UAEZP Hard.");
+        }
+
+        int[] dungeonOffsets =
+        [
+            settings.CaveTierOffset,
+            settings.NordicRuinTierOffset,
+            settings.DwemerRuinTierOffset,
+            settings.MineTierOffset,
+            settings.FortTierOffset,
+            settings.OtherDungeonTierOffset,
+        ];
+        if (dungeonOffsets.Any(offset => offset is < -8 or > 8))
+        {
+            throw new InvalidOperationException(
+                "Dungeon tier offsets must be between -8 and 8.");
         }
     }
 }

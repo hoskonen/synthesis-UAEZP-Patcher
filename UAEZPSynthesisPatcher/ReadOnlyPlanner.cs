@@ -33,6 +33,12 @@ public static class ReadOnlyPlanner
         var perOriginPlugin = new Dictionary<ModKey, int>();
         int forwardedCells = 0;
         int forwardedWorldspaces = 0;
+        var dungeonAssignmentsByCategory = Enum
+            .GetValues<DungeonCategory>()
+            .Where(category => category != DungeonCategory.None)
+            .ToDictionary(category => category, _ => 0);
+        var dungeonTierShifts = new Dictionary<int, int>();
+        int dungeonTierClampedAtMaximum = 0;
 
         RecordPlanSummary cellSummary = PlanAssignments(
             settings.AssignMissingCellEncounterZones,
@@ -43,7 +49,10 @@ public static class ReadOnlyPlanner
             changes,
             distribution,
             perOriginPlugin,
-            ref forwardedCells);
+            ref forwardedCells,
+            dungeonAssignmentsByCategory,
+            dungeonTierShifts,
+            ref dungeonTierClampedAtMaximum);
 
         RecordPlanSummary worldspaceSummary = PlanAssignments(
             settings.AssignMissingWorldspaceEncounterZones,
@@ -54,7 +63,10 @@ public static class ReadOnlyPlanner
             changes,
             distribution,
             perOriginPlugin,
-            ref forwardedWorldspaces);
+            ref forwardedWorldspaces,
+            dungeonAssignmentsByCategory,
+            dungeonTierShifts,
+            ref dungeonTierClampedAtMaximum);
 
         IReadOnlyDictionary<FormKey, byte> desiredMinimumLevels =
             BuildDesiredMinimumLevels(orderedZones, difficultyProfile);
@@ -81,6 +93,10 @@ public static class ReadOnlyPlanner
             DifficultyProfileDisplayName = difficultyProfile.DisplayName,
             EncounterZoneDifficultyChanges = difficultyChanges,
             CombatBoundaryChanges = combatBoundaryChanges,
+            DungeonTierBias = new DungeonTierBiasSummary(
+                dungeonAssignmentsByCategory,
+                dungeonTierShifts,
+                dungeonTierClampedAtMaximum),
         };
 
         ValidateInternalConsistency(plan);
@@ -96,7 +112,10 @@ public static class ReadOnlyPlanner
         ICollection<PlannedChange> changes,
         IDictionary<FormKey, int> distribution,
         IDictionary<ModKey, int> perOriginPlugin,
-        ref int forwardedThroughFwmf)
+        ref int forwardedThroughFwmf,
+        IDictionary<DungeonCategory, int> dungeonAssignmentsByCategory,
+        IDictionary<int, int> dungeonTierShifts,
+        ref int dungeonTierClampedAtMaximum)
     {
         int scanned = 0;
         int missing = 0;
@@ -151,13 +170,45 @@ public static class ReadOnlyPlanner
                 continue;
             }
 
-            ValidatedDummyZone assigned = DeterministicDummyZoneSelector.Select(
+            int baseTier = DeterministicDummyZoneSelector.SelectIndex(
                 settings.DummyZoneMode,
                 settings.Seed,
                 record.FormKey,
-                orderedZones);
+                orderedZones.Count);
+            DungeonTierSelection tierSelection = DungeonTierBias.Apply(
+                settings.DungeonDifficulty,
+                expectedType == PlannedRecordType.Cell
+                    ? record.DungeonCategory
+                    : DungeonCategory.None,
+                baseTier,
+                orderedZones.Count);
+            ValidatedDummyZone assigned = orderedZones[tierSelection.FinalTier];
 
-            changes.Add(new PlannedChange(record, assigned));
+            changes.Add(new PlannedChange(record, assigned)
+            {
+                BaseDummyZoneTier = tierSelection.BaseTier,
+                DungeonTierModifier = tierSelection.Modifier,
+                FinalDummyZoneTier = tierSelection.FinalTier,
+                DungeonTierClampedAtMaximum =
+                    tierSelection.ClampedAtMaximum,
+            });
+            if (settings.EnableDungeonTierBias &&
+                expectedType == PlannedRecordType.Cell &&
+                record.DungeonCategory != DungeonCategory.None)
+            {
+                dungeonAssignmentsByCategory[record.DungeonCategory]++;
+                if (tierSelection.Modifier != 0)
+                {
+                    dungeonTierShifts.TryGetValue(
+                        tierSelection.Modifier,
+                        out int shiftCount);
+                    dungeonTierShifts[tierSelection.Modifier] = shiftCount + 1;
+                }
+                if (tierSelection.ClampedAtMaximum)
+                {
+                    dungeonTierClampedAtMaximum++;
+                }
+            }
             distribution[assigned.FormKey]++;
             IncrementOriginPluginCount(record, perOriginPlugin);
             planned++;

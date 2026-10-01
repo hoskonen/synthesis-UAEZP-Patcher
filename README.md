@@ -93,8 +93,11 @@ CELL and WRLD overrides whose winning FWMF-family record removed a valid earlier
 | **Disable Combat Boundaries** | `true` | Adds `Disable Combat Boundary` to winning ECZN records that do not already have it. |
 | **Forward encounter zones through FWMF** | `false` | When the actual winning CELL or WRLD override comes from an FWMF-family plugin and has an empty `XEZN`, restores the nearest earlier resolvable, non-deleted assignment. |
 | **Difficulty Profile** | `MatchValidatedSource` | Defines the numeric meaning of the nine ordered zone tiers. The default resolves to the active validated UAEZP Easy or Hard source values. |
-| **Dummy Zone Mode** | `DeterministicRandom` | Selects how missing CELL/WRLD links are assigned. `DeterministicRandom` produces a stable per-record selection using **Seed**. `First` always selects `DummyEncounterZone0`. |
+| **Dummy Zone Mode** | `DeterministicRandom` | Selects the base tier for missing CELL/WRLD links. `DeterministicRandom` produces a stable per-record selection using **Seed**. `First` starts at `DummyEncounterZone0`. |
 | **Seed** | `38174` | Controls `DeterministicRandom` assignment. The same seed, load order, and settings reproduce the same assignments. |
+| **Enable Dungeon Tier Bias** | `false` | Applies the configured category offset to newly assigned missing-zone tiers for classified interior dungeons. |
+| **Cave / Nordic Ruin / Dwemer Ruin / Mine Tier Offset** | `+1` | Raises the selected base tier for that dungeon category. |
+| **Fort / Other Dungeon Tier Offset** | `0` | Leaves these categories unchanged by default. |
 | **Dry Run** | `true` | Performs discovery, validation, planning, and reporting without creating functional Skyrim overrides. Disable only after reviewing the report. |
 
 ## Difficulty profiles and selection
@@ -122,6 +125,20 @@ produces a clear validation error.
 Changing the difficulty-profile setting does not participate in zone selection.
 `DeterministicRandom` and `First` continue selecting from the same FormKey-sorted
 dummy-zone list.
+
+### Dungeon tier bias
+
+Dungeon tier bias is an opt-in selection modifier and is disabled by default.
+For a CELL that needs a new dummy-zone assignment, the patcher selects the base
+tier normally, classifies the CELL's associated winning location using Skyrim
+location keywords, applies the configured category offset, and clamps the result
+to tiers 0 through 8. It never adds the offset to an ECZN `MinLevel`.
+
+Only interior CELLs with a resolvable location carrying an applicable dungeon
+keyword are eligible. Caves, Nordic ruins, Dwemer ruins, mines, forts, and other
+locations marked `LocTypeDungeon` are supported. An inn, house, store, arbitrary
+interior, or exterior CELL receives no modifier. Existing `XEZN` links and FWMF
+forwarded links are preserved unchanged.
 
 ## Load-order behavior
 
@@ -167,7 +184,8 @@ Exact assignments are not expected to match the original Pascal script, which us
 ## Reports
 
 Dry Run reports the selected Easy or Hard source, active difficulty profile,
-difficulty and combat-boundary change counts, algorithm and seed, all nine
+dungeon-category and tier-shift diagnostics, difficulty and combat-boundary
+change counts, algorithm and seed, all nine
 dummy-zone identities, CELL/WRLD/ECZN scan and
 eligibility counts, deleted skips, planned totals, separate CELL/WRLD FWMF
 forward counts, assignment distribution, and compact origin-plugin and

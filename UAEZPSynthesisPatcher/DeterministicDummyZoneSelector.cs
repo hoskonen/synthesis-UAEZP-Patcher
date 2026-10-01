@@ -25,11 +25,27 @@ public static class DeterministicDummyZoneSelector
                 "Cannot assign an encounter zone because no validated dummy zones are available.");
         }
 
+        return orderedZones[SelectIndex(mode, seed, target, orderedZones.Count)];
+    }
+
+    public static int SelectIndex(
+        DummyZoneMode mode,
+        int seed,
+        FormKey target,
+        int candidateCount)
+    {
+        if (candidateCount <= 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot assign an encounter zone because no validated dummy " +
+                "zones are available.");
+        }
+
         return mode switch
         {
-            DummyZoneMode.First => orderedZones[0],
+            DummyZoneMode.First => 0,
             DummyZoneMode.DeterministicRandom =>
-                orderedZones[GetV1Index(seed, target, orderedZones.Count)],
+                GetV1Index(seed, target, candidateCount),
             _ => throw new InvalidOperationException(
                 $"Unsupported dummy-zone mode value: {(int)mode}."),
         };

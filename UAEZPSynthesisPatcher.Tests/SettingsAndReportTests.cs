@@ -22,6 +22,13 @@ public sealed class SettingsAndReportTests
             settings.DifficultyProfile);
         Assert.AreEqual(DummyZoneMode.DeterministicRandom, settings.DummyZoneMode);
         Assert.AreEqual(38174, settings.Seed);
+        Assert.IsFalse(settings.EnableDungeonTierBias);
+        Assert.AreEqual(1, settings.CaveTierOffset);
+        Assert.AreEqual(1, settings.NordicRuinTierOffset);
+        Assert.AreEqual(1, settings.DwemerRuinTierOffset);
+        Assert.AreEqual(1, settings.MineTierOffset);
+        Assert.AreEqual(0, settings.FortTierOffset);
+        Assert.AreEqual(0, settings.OtherDungeonTierOffset);
         Assert.IsTrue(settings.DryRun);
     }
 
@@ -55,6 +62,16 @@ public sealed class SettingsAndReportTests
             {
                 DisableCombatBoundaries = false,
             },
+            DungeonDifficulty = new DungeonDifficultySettings
+            {
+                EnableDungeonTierBias = true,
+                CaveTierOffset = 2,
+                NordicRuinTierOffset = 3,
+                DwemerRuinTierOffset = 4,
+                MineTierOffset = 5,
+                FortTierOffset = 6,
+                OtherDungeonTierOffset = 7,
+            },
             Compatibility = new CompatibilitySettings
             {
                 ForwardEncounterZonesThroughFwmf = true,
@@ -76,9 +93,10 @@ public sealed class SettingsAndReportTests
         Assert.IsNotNull(root[nameof(Settings.EncounterZoneAssignment)]);
         Assert.IsNotNull(root[nameof(Settings.EncounterZoneDifficulty)]);
         Assert.IsNotNull(root[nameof(Settings.EncounterZoneBehavior)]);
+        Assert.IsNotNull(root[nameof(Settings.DungeonDifficulty)]);
         Assert.IsNotNull(root[nameof(Settings.Compatibility)]);
         Assert.IsNotNull(root[nameof(Settings.Testing)]);
-        Assert.AreEqual(5, root.Properties().Count());
+        Assert.AreEqual(6, root.Properties().Count());
         Assert.AreEqual(
             "UAEZPHard",
             root[nameof(Settings.EncounterZoneDifficulty)]![
@@ -87,9 +105,9 @@ public sealed class SettingsAndReportTests
         Assert.IsFalse(
             root[nameof(Settings.Testing)]![nameof(TestingSettings.DryRun)]!
                 .Value<bool>());
-        foreach (string legacyName in LegacyFlatSettingNames())
+        foreach (string flatProxyName in FlatSettingProxyNames())
         {
-            Assert.IsNull(root[legacyName]);
+            Assert.IsNull(root[flatProxyName]);
         }
         Assert.IsFalse(roundTrip.AssignMissingCellEncounterZones);
         Assert.IsFalse(roundTrip.AssignMissingWorldspaceEncounterZones);
@@ -100,6 +118,13 @@ public sealed class SettingsAndReportTests
             roundTrip.DifficultyProfile);
         Assert.AreEqual(DummyZoneMode.First, roundTrip.DummyZoneMode);
         Assert.AreEqual(12345, roundTrip.Seed);
+        Assert.IsTrue(roundTrip.EnableDungeonTierBias);
+        Assert.AreEqual(2, roundTrip.CaveTierOffset);
+        Assert.AreEqual(3, roundTrip.NordicRuinTierOffset);
+        Assert.AreEqual(4, roundTrip.DwemerRuinTierOffset);
+        Assert.AreEqual(5, roundTrip.MineTierOffset);
+        Assert.AreEqual(6, roundTrip.FortTierOffset);
+        Assert.AreEqual(7, roundTrip.OtherDungeonTierOffset);
         Assert.IsFalse(roundTrip.DryRun);
     }
 
@@ -171,13 +196,20 @@ public sealed class SettingsAndReportTests
         Assert.IsFalse(settings.DryRun);
     }
 
-    private static IEnumerable<string> LegacyFlatSettingNames()
+    private static IEnumerable<string> FlatSettingProxyNames()
     {
         yield return nameof(Settings.AssignMissingCellEncounterZones);
         yield return nameof(Settings.AssignMissingWorldspaceEncounterZones);
         yield return nameof(Settings.DummyZoneMode);
         yield return nameof(Settings.Seed);
         yield return nameof(Settings.DifficultyProfile);
+        yield return nameof(Settings.EnableDungeonTierBias);
+        yield return nameof(Settings.CaveTierOffset);
+        yield return nameof(Settings.NordicRuinTierOffset);
+        yield return nameof(Settings.DwemerRuinTierOffset);
+        yield return nameof(Settings.MineTierOffset);
+        yield return nameof(Settings.FortTierOffset);
+        yield return nameof(Settings.OtherDungeonTierOffset);
         yield return nameof(Settings.DisableCombatBoundaries);
         yield return nameof(Settings.ForwardEncounterZonesThroughFwmf);
         yield return nameof(Settings.DryRun);
@@ -195,6 +227,9 @@ public sealed class SettingsAndReportTests
         AssertSettingMetadata<Settings>(
             nameof(Settings.EncounterZoneDifficulty),
             "Encounter Zone Difficulty");
+        AssertSettingMetadata<Settings>(
+            nameof(Settings.DungeonDifficulty),
+            "Dungeon Difficulty");
         AssertSettingMetadata<Settings>(
             nameof(Settings.Compatibility),
             "Compatibility");
@@ -234,6 +269,29 @@ public sealed class SettingsAndReportTests
             "Defines the numeric minimum levels of the nine ordered UAEZP " +
             "zone tiers. Match Validated Source preserves the active " +
             "UAEZP.esp values.");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.EnableDungeonTierBias),
+            "Enable Dungeon Tier Bias",
+            "Raises the selected UAEZP dummy-zone tier for classified " +
+            "interior dungeons. Existing XEZN assignments are never shifted.");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.CaveTierOffset),
+            "Cave Tier Offset");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.NordicRuinTierOffset),
+            "Nordic Ruin Tier Offset");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.DwemerRuinTierOffset),
+            "Dwemer Ruin Tier Offset");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.MineTierOffset),
+            "Mine Tier Offset");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.FortTierOffset),
+            "Fort Tier Offset");
+        AssertSettingMetadata<DungeonDifficultySettings>(
+            nameof(DungeonDifficultySettings.OtherDungeonTierOffset),
+            "Other Dungeon Tier Offset");
         AssertSettingMetadata<CompatibilitySettings>(
             nameof(CompatibilitySettings.ForwardEncounterZonesThroughFwmf),
             "Forward encounter zones through FWMF",
@@ -255,6 +313,13 @@ public sealed class SettingsAndReportTests
             nameof(Settings.DifficultyProfile),
             nameof(Settings.DummyZoneMode),
             nameof(Settings.Seed),
+            nameof(Settings.EnableDungeonTierBias),
+            nameof(Settings.CaveTierOffset),
+            nameof(Settings.NordicRuinTierOffset),
+            nameof(Settings.DwemerRuinTierOffset),
+            nameof(Settings.MineTierOffset),
+            nameof(Settings.FortTierOffset),
+            nameof(Settings.OtherDungeonTierOffset),
             nameof(Settings.DryRun),
         ];
         foreach (string alias in aliases)

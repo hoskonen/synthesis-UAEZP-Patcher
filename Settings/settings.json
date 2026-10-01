@@ -8,6 +8,15 @@
   "EncounterZoneDifficulty": {
     "DifficultyProfile": "MatchValidatedSource"
   },
+  "DungeonDifficulty": {
+    "EnableDungeonTierBias": false,
+    "CaveTierOffset": 1,
+    "NordicRuinTierOffset": 1,
+    "DwemerRuinTierOffset": 1,
+    "MineTierOffset": 1,
+    "FortTierOffset": 0,
+    "OtherDungeonTierOffset": 0
+  },
   "EncounterZoneBehavior": {
     "DisableCombatBoundaries": true
   },
