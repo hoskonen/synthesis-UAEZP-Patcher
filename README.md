@@ -189,7 +189,9 @@ change counts, algorithm and seed, all nine
 dummy-zone identities, CELL/WRLD/ECZN scan and
 eligibility counts, deleted skips, planned totals, separate CELL/WRLD FWMF
 forward counts, assignment distribution, and compact origin-plugin and
-provenance diagnostics.
+provenance diagnostics. It also reports assigned interior/LCTN classification
+totals and a capped sample of unclassified locations with their direct and
+parent-location keywords for classification audits.
 
 The provenance section is intentionally retained for the initial release because it is useful when diagnosing pre-existing encounter-zone state. Its plugin breakdowns and example lists are capped to avoid per-record log spam.
 

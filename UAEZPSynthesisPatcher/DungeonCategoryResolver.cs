@@ -18,7 +18,19 @@ public enum DungeonCategory
 public sealed record DungeonCategoryResolution(
     DungeonCategory Category,
     FormKey? LocationFormKey,
-    string? LocationEditorId);
+    string? LocationEditorId)
+{
+    public IReadOnlyList<LocationKeywordDiagnostic> LocationKeywords
+        { get; init; } = [];
+    public FormKey? ParentLocationFormKey { get; init; }
+    public string? ParentLocationEditorId { get; init; }
+    public IReadOnlyList<LocationKeywordDiagnostic> ParentLocationKeywords
+        { get; init; } = [];
+}
+
+public sealed record LocationKeywordDiagnostic(
+    FormKey FormKey,
+    string? EditorId);
 
 public static class DungeonCategoryResolver
 {
@@ -70,10 +82,36 @@ public static class DungeonCategoryResolver
         DungeonCategory category = ClassifyKeywords(
             true,
             location.Keywords?.Select(keyword => keyword.FormKey) ?? []);
-        return new DungeonCategoryResolution(
+        var resolution = new DungeonCategoryResolution(
             category,
             location.FormKey,
-            location.EditorID);
+            location.EditorID)
+        {
+            LocationKeywords = ResolveKeywords(location, linkCache),
+        };
+
+        if (location.ParentLocation.IsNull)
+        {
+            return resolution;
+        }
+
+        FormKey parentFormKey = location.ParentLocation.FormKey;
+        if (!linkCache.TryResolve<ILocationGetter>(
+                parentFormKey,
+                out ILocationGetter? parent))
+        {
+            return resolution with
+            {
+                ParentLocationFormKey = parentFormKey,
+            };
+        }
+
+        return resolution with
+        {
+            ParentLocationFormKey = parent.FormKey,
+            ParentLocationEditorId = parent.EditorID,
+            ParentLocationKeywords = ResolveKeywords(parent, linkCache),
+        };
     }
 
     public static DungeonCategory ClassifyKeywords(
@@ -115,5 +153,27 @@ public static class DungeonCategoryResolver
         }
 
         return DungeonCategory.None;
+    }
+
+    private static IReadOnlyList<LocationKeywordDiagnostic> ResolveKeywords(
+        ILocationGetter location,
+        ILinkCache<ISkyrimMod, ISkyrimModGetter> linkCache)
+    {
+        return (location.Keywords ?? [])
+            .Select(keyword =>
+            {
+                string? editorId = linkCache.TryResolve<IKeywordGetter>(
+                    keyword.FormKey,
+                    out IKeywordGetter? resolved)
+                    ? resolved.EditorID
+                    : null;
+                return new LocationKeywordDiagnostic(
+                    keyword.FormKey,
+                    editorId);
+            })
+            .OrderBy(keyword => keyword.FormKey.ModKey.FileName.String,
+                StringComparer.OrdinalIgnoreCase)
+            .ThenBy(keyword => keyword.FormKey.ID)
+            .ToList();
     }
 }

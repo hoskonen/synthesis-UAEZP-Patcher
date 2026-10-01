@@ -72,6 +72,9 @@ public static class DryRunReport
             text,
             run.Plan.DungeonTierBias,
             settings.EnableDungeonTierBias);
+        AppendDungeonClassificationAudit(
+            text,
+            run.Plan.DungeonClassificationAudit);
 
         text.AppendLine("ECZN difficulty changes:");
         text.AppendLine(
@@ -94,6 +97,78 @@ public static class DryRunReport
         text.AppendLine();
         text.AppendLine("Dry run complete. No Skyrim records were modified.");
         return text.ToString();
+    }
+
+    private static void AppendDungeonClassificationAudit(
+        StringBuilder text,
+        DungeonClassificationAudit audit)
+    {
+        text.AppendLine("Dungeon classification audit:");
+        text.AppendLine(
+            $"  Assigned interior CELLs: {audit.AssignedInteriorCells}");
+        text.AppendLine(
+            $"  Assigned interior CELLs with LCTN: " +
+            $"{audit.AssignedInteriorCellsWithLocation}");
+        text.AppendLine(
+            $"  Classified dungeon CELLs: {audit.ClassifiedDungeonCells}");
+        text.AppendLine(
+            $"  Unclassified interior CELLs with LCTN: " +
+            $"{audit.UnclassifiedInteriorCellsWithLocation}");
+        text.AppendLine();
+        text.AppendLine(
+            $"Unclassified assigned interior CELL sample " +
+            $"(max {ReadOnlyPlanner.UnclassifiedDungeonSampleLimit}):");
+
+        if (audit.UnclassifiedSamples.Count == 0)
+        {
+            text.AppendLine("  (none)");
+            text.AppendLine();
+            return;
+        }
+
+        foreach (UnclassifiedDungeonLocationSample sample in
+                 audit.UnclassifiedSamples)
+        {
+            text.AppendLine(
+                $"  CELL {sample.CellFormKey} / " +
+                $"{sample.CellEditorId ?? "<no EditorID>"}");
+            text.AppendLine(
+                $"    Location {sample.LocationFormKey} / " +
+                $"{sample.LocationEditorId ?? "<unresolved or no EditorID>"}");
+            text.AppendLine(
+                $"    Location keywords: " +
+                FormatKeywords(sample.LocationKeywords));
+            text.AppendLine(
+                $"    Parent location: " +
+                FormatLocation(
+                    sample.ParentLocationFormKey,
+                    sample.ParentLocationEditorId));
+            text.AppendLine(
+                $"    Parent-location keywords: " +
+                FormatKeywords(sample.ParentLocationKeywords));
+        }
+        text.AppendLine();
+    }
+
+    private static string FormatLocation(
+        Mutagen.Bethesda.Plugins.FormKey? formKey,
+        string? editorId)
+    {
+        return formKey is null
+            ? "(none)"
+            : $"{formKey} / {editorId ?? "<unresolved or no EditorID>"}";
+    }
+
+    private static string FormatKeywords(
+        IReadOnlyList<LocationKeywordDiagnostic> keywords)
+    {
+        return keywords.Count == 0
+            ? "(none)"
+            : string.Join(
+                ", ",
+                keywords.Select(keyword =>
+                    $"{keyword.FormKey} / " +
+                    $"{keyword.EditorId ?? "<unresolved or no EditorID>"}"));
     }
 
     private static void AppendSummary(

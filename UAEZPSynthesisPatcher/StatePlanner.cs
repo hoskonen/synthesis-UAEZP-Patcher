@@ -67,8 +67,14 @@ public static class StatePlanner
                 return snapshot with
                 {
                     DungeonCategory = dungeon.Category,
+                    IsInteriorCell = context.Record.Flags.HasFlag(
+                        Cell.Flag.IsInteriorCell),
                     LocationFormKey = dungeon.LocationFormKey,
                     LocationEditorId = dungeon.LocationEditorId,
+                    LocationKeywords = dungeon.LocationKeywords,
+                    ParentLocationFormKey = dungeon.ParentLocationFormKey,
+                    ParentLocationEditorId = dungeon.ParentLocationEditorId,
+                    ParentLocationKeywords = dungeon.ParentLocationKeywords,
                     EarlierResolvableEncounterZoneTarget =
                         FindEarlierCellEncounterZone(
                             state,

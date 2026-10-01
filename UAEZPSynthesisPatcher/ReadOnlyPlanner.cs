@@ -4,6 +4,8 @@ namespace UAEZPSynthesisPatcher;
 
 public static class ReadOnlyPlanner
 {
+    public const int UnclassifiedDungeonSampleLimit = 25;
+
     public static PatchPlan Build(
         Settings settings,
         IReadOnlyList<ValidatedDummyZone> orderedZones,
@@ -39,6 +41,8 @@ public static class ReadOnlyPlanner
             .ToDictionary(category => category, _ => 0);
         var dungeonTierShifts = new Dictionary<int, int>();
         int dungeonTierClampedAtMaximum = 0;
+        var dungeonClassificationAudit =
+            new DungeonClassificationAuditBuilder();
 
         RecordPlanSummary cellSummary = PlanAssignments(
             settings.AssignMissingCellEncounterZones,
@@ -52,7 +56,8 @@ public static class ReadOnlyPlanner
             ref forwardedCells,
             dungeonAssignmentsByCategory,
             dungeonTierShifts,
-            ref dungeonTierClampedAtMaximum);
+            ref dungeonTierClampedAtMaximum,
+            dungeonClassificationAudit);
 
         RecordPlanSummary worldspaceSummary = PlanAssignments(
             settings.AssignMissingWorldspaceEncounterZones,
@@ -66,7 +71,8 @@ public static class ReadOnlyPlanner
             ref forwardedWorldspaces,
             dungeonAssignmentsByCategory,
             dungeonTierShifts,
-            ref dungeonTierClampedAtMaximum);
+            ref dungeonTierClampedAtMaximum,
+            dungeonClassificationAudit);
 
         IReadOnlyDictionary<FormKey, byte> desiredMinimumLevels =
             BuildDesiredMinimumLevels(orderedZones, difficultyProfile);
@@ -97,6 +103,7 @@ public static class ReadOnlyPlanner
                 dungeonAssignmentsByCategory,
                 dungeonTierShifts,
                 dungeonTierClampedAtMaximum),
+            DungeonClassificationAudit = dungeonClassificationAudit.Build(),
         };
 
         ValidateInternalConsistency(plan);
@@ -115,7 +122,8 @@ public static class ReadOnlyPlanner
         ref int forwardedThroughFwmf,
         IDictionary<DungeonCategory, int> dungeonAssignmentsByCategory,
         IDictionary<int, int> dungeonTierShifts,
-        ref int dungeonTierClampedAtMaximum)
+        ref int dungeonTierClampedAtMaximum,
+        DungeonClassificationAuditBuilder dungeonClassificationAudit)
     {
         int scanned = 0;
         int missing = 0;
@@ -192,6 +200,10 @@ public static class ReadOnlyPlanner
                 DungeonTierClampedAtMaximum =
                     tierSelection.ClampedAtMaximum,
             });
+            if (expectedType == PlannedRecordType.Cell)
+            {
+                dungeonClassificationAudit.Record(record);
+            }
             if (settings.EnableDungeonTierBias &&
                 expectedType == PlannedRecordType.Cell &&
                 record.DungeonCategory != DungeonCategory.None)
@@ -378,6 +390,62 @@ public static class ReadOnlyPlanner
             throw new InvalidOperationException(
                 "Internal planning error: ECZN intent counts do not match " +
                 "the captured changes.");
+        }
+    }
+
+    private sealed class DungeonClassificationAuditBuilder
+    {
+        private int _assignedInteriorCells;
+        private int _assignedInteriorCellsWithLocation;
+        private int _classifiedDungeonCells;
+        private int _unclassifiedInteriorCellsWithLocation;
+        private readonly List<UnclassifiedDungeonLocationSample> _samples = [];
+
+        public void Record(RecordSnapshot record)
+        {
+            if (!record.IsInteriorCell)
+            {
+                return;
+            }
+
+            _assignedInteriorCells++;
+            if (record.LocationFormKey is not FormKey locationFormKey)
+            {
+                return;
+            }
+
+            _assignedInteriorCellsWithLocation++;
+            if (record.DungeonCategory != DungeonCategory.None)
+            {
+                _classifiedDungeonCells++;
+                return;
+            }
+
+            _unclassifiedInteriorCellsWithLocation++;
+            if (_samples.Count >= UnclassifiedDungeonSampleLimit)
+            {
+                return;
+            }
+
+            _samples.Add(new UnclassifiedDungeonLocationSample(
+                record.FormKey,
+                record.EditorId,
+                locationFormKey,
+                record.LocationEditorId,
+                record.LocationKeywords,
+                record.ParentLocationFormKey,
+                record.ParentLocationEditorId,
+                record.ParentLocationKeywords));
+        }
+
+        public DungeonClassificationAudit Build()
+        {
+            return new DungeonClassificationAudit(
+                _assignedInteriorCells,
+                _assignedInteriorCellsWithLocation,
+                _classifiedDungeonCells,
+                _unclassifiedInteriorCellsWithLocation,
+                _samples);
         }
     }
 }

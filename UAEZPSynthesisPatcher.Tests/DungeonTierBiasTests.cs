@@ -54,6 +54,16 @@ public sealed class DungeonTierBiasTests
         var mod = new SkyrimMod(
             ModKey.FromFileName("Locations.esp"),
             SkyrimRelease.SkyrimSE);
+        var parent = new Location(
+            mod.GetNextFormKey(),
+            SkyrimRelease.SkyrimSE)
+        {
+            EditorID = "TestParentLocation",
+        };
+        parent.Keywords ??= [];
+        parent.Keywords.Add(
+            new FormLink<IKeywordGetter>(DungeonCategoryResolver.LocTypeHouse));
+        mod.Locations.Add(parent);
         var location = new Location(
             mod.GetNextFormKey(),
             SkyrimRelease.SkyrimSE)
@@ -64,6 +74,7 @@ public sealed class DungeonTierBiasTests
         location.Keywords.Add(
             new FormLink<IKeywordGetter>(
                 DungeonCategoryResolver.LocSetNordicRuin));
+        location.ParentLocation.SetTo(parent.FormKey);
         mod.Locations.Add(location);
         var cell = new Cell(mod.GetNextFormKey(), SkyrimRelease.SkyrimSE)
         {
@@ -80,6 +91,158 @@ public sealed class DungeonTierBiasTests
         Assert.AreEqual(DungeonCategory.NordicRuin, result.Category);
         Assert.AreEqual(location.FormKey, result.LocationFormKey);
         Assert.AreEqual("TestNordicDungeon", result.LocationEditorId);
+        Assert.AreEqual(
+            DungeonCategoryResolver.LocSetNordicRuin,
+            result.LocationKeywords.Single().FormKey);
+        Assert.AreEqual(parent.FormKey, result.ParentLocationFormKey);
+        Assert.AreEqual("TestParentLocation", result.ParentLocationEditorId);
+        Assert.AreEqual(
+            DungeonCategoryResolver.LocTypeHouse,
+            result.ParentLocationKeywords.Single().FormKey);
+    }
+
+    [TestMethod]
+    public void ClassificationAuditCountsOnlyNewInteriorDummyAssignments()
+    {
+        var settings = new Settings
+        {
+            DisableCombatBoundaries = false,
+            ForwardEncounterZonesThroughFwmf = true,
+        };
+        RecordSnapshot interiorWithoutLocation = DiagnosticCell(1) with
+        {
+            IsInteriorCell = true,
+        };
+        RecordSnapshot classified = DiagnosticCell(2) with
+        {
+            IsInteriorCell = true,
+            DungeonCategory = DungeonCategory.Cave,
+            LocationFormKey = new FormKey(TestData.SkyrimModKey, 0x2001),
+        };
+        RecordSnapshot unclassified = DiagnosticCell(3) with
+        {
+            IsInteriorCell = true,
+            LocationFormKey = new FormKey(TestData.SkyrimModKey, 0x2002),
+        };
+        RecordSnapshot exterior = DiagnosticCell(4) with
+        {
+            LocationFormKey = new FormKey(TestData.SkyrimModKey, 0x2003),
+        };
+        RecordSnapshot existing = DiagnosticCell(5) with
+        {
+            IsInteriorCell = true,
+            LocationFormKey = new FormKey(TestData.SkyrimModKey, 0x2004),
+            RequirementSatisfied = true,
+        };
+        RecordSnapshot forwarded = TestData.Record(
+            PlannedRecordType.Cell,
+            6,
+            winningModKey: ModKey.FromFileName("FWMF.esp")) with
+        {
+            IsInteriorCell = true,
+            LocationFormKey = new FormKey(TestData.SkyrimModKey, 0x2005),
+            EarlierResolvableEncounterZoneTarget =
+                new FormKey(TestData.SkyrimModKey, 0x2500),
+        };
+
+        PatchPlan plan = ReadOnlyPlanner.Build(
+            settings,
+            TestData.ValidatedZones(),
+            [
+                interiorWithoutLocation,
+                classified,
+                unclassified,
+                exterior,
+                existing,
+                forwarded,
+            ],
+            [],
+            []);
+        DungeonClassificationAudit audit = plan.DungeonClassificationAudit;
+
+        Assert.AreEqual(3, audit.AssignedInteriorCells);
+        Assert.AreEqual(2, audit.AssignedInteriorCellsWithLocation);
+        Assert.AreEqual(1, audit.ClassifiedDungeonCells);
+        Assert.AreEqual(1, audit.UnclassifiedInteriorCellsWithLocation);
+        Assert.AreEqual(unclassified.FormKey, audit.UnclassifiedSamples.Single()
+            .CellFormKey);
+    }
+
+    [TestMethod]
+    public void DryRunReportsUnclassifiedLocationAndParentMetadata()
+    {
+        var settings = new Settings { DisableCombatBoundaries = false };
+        FormKey location = new(TestData.SkyrimModKey, 0x2100);
+        FormKey parent = new(TestData.SkyrimModKey, 0x2200);
+        FormKey locationKeyword = new(TestData.SkyrimModKey, 0x2300);
+        FormKey parentKeyword = new(TestData.SkyrimModKey, 0x2400);
+        RecordSnapshot cell = DiagnosticCell(10) with
+        {
+            EditorId = "AuditCell",
+            IsInteriorCell = true,
+            LocationFormKey = location,
+            LocationEditorId = "AuditLocation",
+            LocationKeywords =
+            [new LocationKeywordDiagnostic(locationKeyword, "AuditKeyword")],
+            ParentLocationFormKey = parent,
+            ParentLocationEditorId = "AuditParent",
+            ParentLocationKeywords =
+            [new LocationKeywordDiagnostic(parentKeyword, "ParentKeyword")],
+        };
+        ValidatedSourcePlugin source =
+            SourcePluginValidator.Validate([TestData.EasySource()]);
+        PatchPlan plan = ReadOnlyPlanner.Build(
+            settings,
+            source.DummyZones,
+            [cell],
+            [],
+            []);
+
+        string report = DryRunReport.Render(
+            new PlanningRun(source, plan),
+            settings);
+
+        StringAssert.Contains(report, "Assigned interior CELLs: 1");
+        StringAssert.Contains(report, "Assigned interior CELLs with LCTN: 1");
+        StringAssert.Contains(report, "Classified dungeon CELLs: 0");
+        StringAssert.Contains(
+            report,
+            "Unclassified interior CELLs with LCTN: 1");
+        StringAssert.Contains(report, $"CELL {cell.FormKey} / AuditCell");
+        StringAssert.Contains(report, $"Location {location} / AuditLocation");
+        StringAssert.Contains(report, $"{locationKeyword} / AuditKeyword");
+        StringAssert.Contains(report, $"{parent} / AuditParent");
+        StringAssert.Contains(report, $"{parentKeyword} / ParentKeyword");
+    }
+
+    [TestMethod]
+    public void UnclassifiedLocationSampleIsCapped()
+    {
+        var settings = new Settings { DisableCombatBoundaries = false };
+        RecordSnapshot[] cells = Enumerable.Range(1, 30)
+            .Select(index => DiagnosticCell((uint)index) with
+            {
+                IsInteriorCell = true,
+                LocationFormKey = new FormKey(
+                    TestData.SkyrimModKey,
+                    0x3000u + (uint)index),
+            })
+            .ToArray();
+
+        PatchPlan plan = ReadOnlyPlanner.Build(
+            settings,
+            TestData.ValidatedZones(),
+            cells,
+            [],
+            []);
+
+        Assert.AreEqual(
+            30,
+            plan.DungeonClassificationAudit
+                .UnclassifiedInteriorCellsWithLocation);
+        Assert.AreEqual(
+            ReadOnlyPlanner.UnclassifiedDungeonSampleLimit,
+            plan.DungeonClassificationAudit.UnclassifiedSamples.Count);
     }
 
     [TestMethod]
@@ -320,5 +483,10 @@ public sealed class DungeonTierBiasTests
             LocationFormKey = new FormKey(TestData.SkyrimModKey, 0x2000),
             LocationEditorId = "TestDungeonLocation",
         };
+    }
+
+    private static RecordSnapshot DiagnosticCell(uint id)
+    {
+        return TestData.Record(PlannedRecordType.Cell, id);
     }
 }

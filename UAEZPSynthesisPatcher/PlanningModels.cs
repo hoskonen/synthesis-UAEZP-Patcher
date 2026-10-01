@@ -51,8 +51,15 @@ public sealed record RecordSnapshot(
     public FormKey? EarlierResolvableEncounterZoneTarget { get; init; }
     public byte? EncounterZoneMinimumLevel { get; init; }
     public DungeonCategory DungeonCategory { get; init; }
+    public bool IsInteriorCell { get; init; }
     public FormKey? LocationFormKey { get; init; }
     public string? LocationEditorId { get; init; }
+    public IReadOnlyList<LocationKeywordDiagnostic> LocationKeywords
+        { get; init; } = [];
+    public FormKey? ParentLocationFormKey { get; init; }
+    public string? ParentLocationEditorId { get; init; }
+    public IReadOnlyList<LocationKeywordDiagnostic> ParentLocationKeywords
+        { get; init; } = [];
 }
 
 public sealed record ExistingLinkSample(
@@ -109,6 +116,23 @@ public sealed record DungeonTierBiasSummary(
     IReadOnlyDictionary<int, int> TierShifts,
     int ClampedAtMaximum);
 
+public sealed record UnclassifiedDungeonLocationSample(
+    FormKey CellFormKey,
+    string? CellEditorId,
+    FormKey LocationFormKey,
+    string? LocationEditorId,
+    IReadOnlyList<LocationKeywordDiagnostic> LocationKeywords,
+    FormKey? ParentLocationFormKey,
+    string? ParentLocationEditorId,
+    IReadOnlyList<LocationKeywordDiagnostic> ParentLocationKeywords);
+
+public sealed record DungeonClassificationAudit(
+    int AssignedInteriorCells,
+    int AssignedInteriorCellsWithLocation,
+    int ClassifiedDungeonCells,
+    int UnclassifiedInteriorCellsWithLocation,
+    IReadOnlyList<UnclassifiedDungeonLocationSample> UnclassifiedSamples);
+
 public sealed record ApplyContextCatalog(
     IReadOnlyDictionary<FormKey, Func<ISkyrimMod, ICell>> Cells,
     IReadOnlyDictionary<FormKey, Func<ISkyrimMod, IWorldspace>> Worldspaces,
@@ -153,6 +177,8 @@ public sealed record PatchPlan(
         new Dictionary<DungeonCategory, int>(),
         new Dictionary<int, int>(),
         0);
+    public DungeonClassificationAudit DungeonClassificationAudit { get; init; } =
+        new(0, 0, 0, 0, []);
 
     public int TotalPlannedOverrides =>
         Cells.PlannedOverrides + Worldspaces.PlannedOverrides + EncounterZones.PlannedOverrides;
