@@ -5,6 +5,7 @@ namespace UAEZPSynthesisPatcher;
 public static class ReadOnlyPlanner
 {
     public const int UnclassifiedDungeonSampleLimit = 25;
+    public const int ExistingDungeonEncounterZoneSampleLimit = 25;
 
     public static PatchPlan Build(
         Settings settings,
@@ -76,12 +77,21 @@ public static class ReadOnlyPlanner
 
         IReadOnlyDictionary<FormKey, byte> desiredMinimumLevels =
             BuildDesiredMinimumLevels(orderedZones, difficultyProfile);
+        ExistingDungeonPlanningResult existingDungeonPlanning =
+            PlanExistingDungeonEncounterZones(
+                settings,
+                orderedZones,
+                cellRecords,
+                encounterZoneRecords,
+                difficultyProfile);
         RecordPlanSummary encounterZoneSummary = PlanEncounterZones(
             settings,
             encounterZoneRecords,
             desiredMinimumLevels,
+            existingDungeonPlanning.DesiredMinimumLevels,
             changes,
             out int difficultyChanges,
+            out int existingDungeonDifficultyChanges,
             out int combatBoundaryChanges);
 
         var plan = new PatchPlan(
@@ -99,6 +109,11 @@ public static class ReadOnlyPlanner
             DifficultyProfileDisplayName = difficultyProfile.DisplayName,
             EncounterZoneDifficultyChanges = difficultyChanges,
             CombatBoundaryChanges = combatBoundaryChanges,
+            ExistingDungeonEncounterZoneBias =
+                existingDungeonPlanning.Summary with
+                {
+                    PlannedChanges = existingDungeonDifficultyChanges,
+                },
             DungeonTierBias = new DungeonTierBiasSummary(
                 dungeonAssignmentsByCategory,
                 dungeonTierShifts,
@@ -249,8 +264,10 @@ public static class ReadOnlyPlanner
         Settings settings,
         IEnumerable<RecordSnapshot> records,
         IReadOnlyDictionary<FormKey, byte> desiredMinimumLevels,
+        IReadOnlyDictionary<FormKey, byte> existingDungeonMinimumLevels,
         ICollection<PlannedChange> changes,
         out int difficultyChanges,
+        out int existingDungeonDifficultyChanges,
         out int combatBoundaryChanges)
     {
         int scanned = 0;
@@ -259,6 +276,7 @@ public static class ReadOnlyPlanner
         int deleted = 0;
         int planned = 0;
         difficultyChanges = 0;
+        existingDungeonDifficultyChanges = 0;
         combatBoundaryChanges = 0;
         bool applyDifficulty = settings.DifficultyProfile !=
             EncounterZoneDifficultyProfileSelection.MatchValidatedSource;
@@ -287,6 +305,8 @@ public static class ReadOnlyPlanner
                 settings.DisableCombatBoundaries &&
                 !record.RequirementSatisfied;
             byte? desiredMinimumLevel = null;
+            bool isDifficultyProfileChange = false;
+            bool isExistingDungeonChange = false;
             if (applyDifficulty &&
                 desiredMinimumLevels.TryGetValue(
                     record.FormKey,
@@ -299,6 +319,22 @@ public static class ReadOnlyPlanner
                 if (existingMinimumLevel != desired)
                 {
                     desiredMinimumLevel = desired;
+                    isDifficultyProfileChange = true;
+                }
+            }
+
+            if (existingDungeonMinimumLevels.TryGetValue(
+                    record.FormKey,
+                    out byte dungeonDesired))
+            {
+                byte existingMinimumLevel =
+                    record.EncounterZoneMinimumLevel ??
+                    throw new InvalidOperationException(
+                        $"Dungeon ECZN {record.FormKey} has no captured MinLevel.");
+                if (existingMinimumLevel != dungeonDesired)
+                {
+                    desiredMinimumLevel = dungeonDesired;
+                    isExistingDungeonChange = true;
                 }
             }
 
@@ -311,14 +347,22 @@ public static class ReadOnlyPlanner
             {
                 AddDisableCombatBoundary = addCombatBoundary,
                 DesiredEncounterZoneMinimumLevel = desiredMinimumLevel,
+                IsDifficultyProfileMinimumLevelChange =
+                    isDifficultyProfileChange,
+                IsExistingDungeonMinimumLevelChange =
+                    isExistingDungeonChange,
             });
             if (addCombatBoundary)
             {
                 combatBoundaryChanges++;
             }
-            if (desiredMinimumLevel is not null)
+            if (isDifficultyProfileChange)
             {
                 difficultyChanges++;
+            }
+            if (isExistingDungeonChange)
+            {
+                existingDungeonDifficultyChanges++;
             }
             planned++;
         }
@@ -346,6 +390,173 @@ public static class ReadOnlyPlanner
                 MinimumLevel = difficultyProfile.Tiers[index].MinimumLevel,
             })
             .ToDictionary(item => item.FormKey, item => item.MinimumLevel);
+    }
+
+    private static ExistingDungeonPlanningResult PlanExistingDungeonEncounterZones(
+        Settings settings,
+        IReadOnlyList<ValidatedDummyZone> orderedZones,
+        IEnumerable<RecordSnapshot> cells,
+        IEnumerable<RecordSnapshot> encounterZones,
+        EncounterZoneDifficultyProfile difficultyProfile)
+    {
+        Dictionary<DungeonCategory, HashSet<FormKey>> categoryZones = Enum
+            .GetValues<DungeonCategory>()
+            .Where(category => category != DungeonCategory.None)
+            .ToDictionary(category => category, _ => new HashSet<FormKey>());
+        if (!settings.EnableDungeonTierBias)
+        {
+            return EmptyExistingDungeonPlanning(categoryZones);
+        }
+
+        HashSet<FormKey> dummyZones = orderedZones
+            .Select(zone => zone.FormKey)
+            .ToHashSet();
+        Dictionary<FormKey, RecordSnapshot> zoneSnapshots = encounterZones
+            .ToDictionary(record => record.FormKey);
+        var requests = new Dictionary<FormKey, List<ExistingDungeonRequest>>();
+        var samples = new List<ExistingDungeonEncounterZoneSample>();
+
+        foreach (RecordSnapshot cell in cells)
+        {
+            if (cell.RecordType != PlannedRecordType.Cell ||
+                cell.IsDeleted ||
+                !cell.RequirementSatisfied ||
+                cell.HasUnresolvedRequirementReference ||
+                cell.DungeonCategory == DungeonCategory.None ||
+                cell.EncounterZoneTarget is not FormKey zoneFormKey ||
+                dummyZones.Contains(zoneFormKey) ||
+                !zoneSnapshots.TryGetValue(zoneFormKey, out RecordSnapshot? zone) ||
+                zone.IsDeleted ||
+                zone.EncounterZoneMinimumLevel is not byte existingMinimumLevel)
+            {
+                continue;
+            }
+
+            int offset = DungeonTierBias.GetOffset(
+                settings.DungeonDifficulty,
+                cell.DungeonCategory);
+            byte desiredMinimumLevel =
+                ExistingEncounterZoneDifficultyResolver.Resolve(
+                    existingMinimumLevel,
+                    difficultyProfile,
+                    offset);
+
+            categoryZones[cell.DungeonCategory].Add(zoneFormKey);
+            if (!requests.TryGetValue(
+                    zoneFormKey,
+                    out List<ExistingDungeonRequest>? zoneRequests))
+            {
+                zoneRequests = [];
+                requests.Add(zoneFormKey, zoneRequests);
+            }
+            zoneRequests.Add(new ExistingDungeonRequest(
+                offset,
+                desiredMinimumLevel));
+
+            if (samples.Count < ExistingDungeonEncounterZoneSampleLimit)
+            {
+                samples.Add(new ExistingDungeonEncounterZoneSample(
+                    cell.FormKey,
+                    cell.EditorId,
+                    cell.LocationFormKey,
+                    cell.LocationEditorId,
+                    cell.DungeonCategory,
+                    zoneFormKey,
+                    zone.EditorId ?? cell.ResolvedEncounterZoneEditorId,
+                    existingMinimumLevel,
+                    offset,
+                    desiredMinimumLevel));
+            }
+        }
+
+        var desiredByZone = new Dictionary<FormKey, byte>();
+        int unchangedAtBoundary = 0;
+        int sharedConflicts = 0;
+        foreach ((FormKey zoneFormKey, List<ExistingDungeonRequest> zoneRequests)
+                 in requests.OrderBy(pair => pair.Key))
+        {
+            byte existingMinimumLevel = zoneSnapshots[zoneFormKey]
+                .EncounterZoneMinimumLevel!.Value;
+            ExistingDungeonRequest[] positive = zoneRequests
+                .Where(request => request.Offset > 0)
+                .ToArray();
+            ExistingDungeonRequest[] negative = zoneRequests
+                .Where(request => request.Offset < 0)
+                .ToArray();
+            byte desiredMinimumLevel;
+            bool mixedDirectionConflict = false;
+
+            if (positive.Length > 0 && negative.Length > 0)
+            {
+                // Mixed direction requests are intentionally neutralized. This
+                // is deterministic and avoids making shared-zone difficulty
+                // depend on CELL enumeration order.
+                desiredMinimumLevel = existingMinimumLevel;
+                mixedDirectionConflict = true;
+                sharedConflicts++;
+            }
+            else if (positive.Length > 0)
+            {
+                desiredMinimumLevel = positive.Max(request =>
+                    request.DesiredMinimumLevel);
+                if (positive.Select(request => request.DesiredMinimumLevel)
+                    .Distinct().Skip(1).Any())
+                {
+                    sharedConflicts++;
+                }
+            }
+            else if (negative.Length > 0)
+            {
+                desiredMinimumLevel = negative.Min(request =>
+                    request.DesiredMinimumLevel);
+                if (negative.Select(request => request.DesiredMinimumLevel)
+                    .Distinct().Skip(1).Any())
+                {
+                    sharedConflicts++;
+                }
+            }
+            else
+            {
+                desiredMinimumLevel = existingMinimumLevel;
+            }
+
+            if (desiredMinimumLevel == existingMinimumLevel)
+            {
+                if (!mixedDirectionConflict &&
+                    zoneRequests.Any(request => request.Offset != 0))
+                {
+                    unchangedAtBoundary++;
+                }
+                continue;
+            }
+
+            desiredByZone.Add(zoneFormKey, desiredMinimumLevel);
+        }
+
+        var counts = categoryZones.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Count);
+        return new ExistingDungeonPlanningResult(
+            desiredByZone,
+            new ExistingDungeonEncounterZoneBiasSummary(
+                counts,
+                desiredByZone.Count,
+                unchangedAtBoundary,
+                sharedConflicts,
+                samples));
+    }
+
+    private static ExistingDungeonPlanningResult EmptyExistingDungeonPlanning(
+        IReadOnlyDictionary<DungeonCategory, HashSet<FormKey>> categoryZones)
+    {
+        return new ExistingDungeonPlanningResult(
+            new Dictionary<FormKey, byte>(),
+            new ExistingDungeonEncounterZoneBiasSummary(
+                categoryZones.ToDictionary(pair => pair.Key, _ => 0),
+                0,
+                0,
+                0,
+                []));
     }
 
     private static void EnsureRecordType(
@@ -378,12 +589,16 @@ public static class ReadOnlyPlanner
         }
 
         int difficultyChanges = plan.Changes.Count(change =>
-            change.DesiredEncounterZoneMinimumLevel is not null);
+            change.IsDifficultyProfileMinimumLevelChange);
+        int existingDungeonDifficultyChanges = plan.Changes.Count(change =>
+            change.IsExistingDungeonMinimumLevelChange);
         int combatBoundaryChanges = plan.Changes.Count(change =>
             change.AddDisableCombatBoundary);
         int encounterZoneChanges = plan.Changes.Count(change =>
             change.Target.RecordType == PlannedRecordType.EncounterZone);
         if (difficultyChanges != plan.EncounterZoneDifficultyChanges ||
+            existingDungeonDifficultyChanges !=
+                plan.ExistingDungeonEncounterZoneBias.PlannedChanges ||
             combatBoundaryChanges != plan.CombatBoundaryChanges ||
             encounterZoneChanges != plan.EncounterZones.PlannedOverrides)
         {
@@ -392,6 +607,14 @@ public static class ReadOnlyPlanner
                 "the captured changes.");
         }
     }
+
+    private sealed record ExistingDungeonRequest(
+        int Offset,
+        byte DesiredMinimumLevel);
+
+    private sealed record ExistingDungeonPlanningResult(
+        IReadOnlyDictionary<FormKey, byte> DesiredMinimumLevels,
+        ExistingDungeonEncounterZoneBiasSummary Summary);
 
     private sealed class DungeonClassificationAuditBuilder
     {

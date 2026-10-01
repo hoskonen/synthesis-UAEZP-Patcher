@@ -46,7 +46,7 @@ public static class DungeonTierBiasReport
         text.AppendLine();
     }
 
-    private static string FormatCategory(DungeonCategory category)
+    public static string FormatCategory(DungeonCategory category)
     {
         return category switch
         {

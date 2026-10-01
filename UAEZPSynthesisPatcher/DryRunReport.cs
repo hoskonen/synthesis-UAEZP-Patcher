@@ -75,6 +75,10 @@ public static class DryRunReport
         AppendDungeonClassificationAudit(
             text,
             run.Plan.DungeonClassificationAudit);
+        ExistingDungeonEncounterZoneBiasReport.Append(
+            text,
+            run.Plan.ExistingDungeonEncounterZoneBias,
+            includeSamples: true);
 
         text.AppendLine("ECZN difficulty changes:");
         text.AppendLine(

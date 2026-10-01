@@ -95,7 +95,7 @@ CELL and WRLD overrides whose winning FWMF-family record removed a valid earlier
 | **Difficulty Profile** | `MatchValidatedSource` | Defines the numeric meaning of the nine ordered zone tiers. The default resolves to the active validated UAEZP Easy or Hard source values. |
 | **Dummy Zone Mode** | `DeterministicRandom` | Selects the base tier for missing CELL/WRLD links. `DeterministicRandom` produces a stable per-record selection using **Seed**. `First` starts at `DummyEncounterZone0`. |
 | **Seed** | `38174` | Controls `DeterministicRandom` assignment. The same seed, load order, and settings reproduce the same assignments. |
-| **Enable Dungeon Tier Bias** | `false` | Applies the configured category offset to newly assigned missing-zone tiers for classified interior dungeons. |
+| **Enable Dungeon Tier Bias** | `false` | Applies the configured category offset to newly assigned missing-zone tiers and to the `MinLevel` of existing resolvable dungeon encounter zones. Existing CELL XEZN links are preserved. |
 | **Cave / Nordic Ruin / Dwemer Ruin / Mine Tier Offset** | `+1` | Raises the selected base tier for that dungeon category. |
 | **Fort / Other Dungeon Tier Offset** | `0` | Leaves these categories unchanged by default. |
 | **Dry Run** | `true` | Performs discovery, validation, planning, and reporting without creating functional Skyrim overrides. Disable only after reviewing the report. |
@@ -128,11 +128,23 @@ dummy-zone list.
 
 ### Dungeon tier bias
 
-Dungeon tier bias is an opt-in selection modifier and is disabled by default.
-For a CELL that needs a new dummy-zone assignment, the patcher selects the base
-tier normally, classifies the CELL's associated winning location using Skyrim
-location keywords, applies the configured category offset, and clamps the result
-to tiers 0 through 8. It never adds the offset to an ECZN `MinLevel`.
+Dungeon tier bias is opt-in and disabled by default. The patcher classifies the
+CELL's associated winning location using Skyrim location keywords. Its behavior
+then depends on whether the dungeon is unzoned or already zoned:
+
+- **New/unzoned dungeon:** select a UAEZP dummy tier normally, apply the category
+  offset to the tier index, and clamp the result to tiers 0 through 8.
+- **Existing zoned dungeon:** preserve the CELL's XEZN link and minimally override
+  that existing ECZN's `MinLevel`. The category offset moves through the active
+  difficulty profile's distinct numeric breakpoints; it is not raw level addition.
+  Positive offsets never lower a level above the profile ceiling, and negative
+  offsets never raise a level below the profile floor.
+
+The nine UAEZP dummy ECZNs are excluded from the existing-zone path and remain
+controlled only by the global Difficulty Profile. Multiple CELLs sharing an ECZN
+produce one ECZN override. Same-direction requests use the strongest result;
+mixed positive and negative requests are conservatively neutralized and reported
+as a resolved shared-zone conflict.
 
 Only interior CELLs with a resolvable location carrying an applicable dungeon
 keyword are eligible. Caves, Nordic ruins, Dwemer ruins, mines, forts, and other

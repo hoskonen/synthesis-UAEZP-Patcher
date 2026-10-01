@@ -93,6 +93,8 @@ public sealed record PlannedChange(
     public FormKey? ForwardedEncounterZone { get; init; }
     public bool AddDisableCombatBoundary { get; init; }
     public byte? DesiredEncounterZoneMinimumLevel { get; init; }
+    public bool IsDifficultyProfileMinimumLevelChange { get; init; }
+    public bool IsExistingDungeonMinimumLevelChange { get; init; }
     public int? BaseDummyZoneTier { get; init; }
     public int DungeonTierModifier { get; init; }
     public int? FinalDummyZoneTier { get; init; }
@@ -133,6 +135,25 @@ public sealed record DungeonClassificationAudit(
     int UnclassifiedInteriorCellsWithLocation,
     IReadOnlyList<UnclassifiedDungeonLocationSample> UnclassifiedSamples);
 
+public sealed record ExistingDungeonEncounterZoneSample(
+    FormKey CellFormKey,
+    string? CellEditorId,
+    FormKey? LocationFormKey,
+    string? LocationEditorId,
+    DungeonCategory Category,
+    FormKey EncounterZoneFormKey,
+    string? EncounterZoneEditorId,
+    byte ExistingMinimumLevel,
+    int TierOffset,
+    byte DesiredMinimumLevel);
+
+public sealed record ExistingDungeonEncounterZoneBiasSummary(
+    IReadOnlyDictionary<DungeonCategory, int> EncounterZonesByCategory,
+    int PlannedChanges,
+    int UnchangedAtProfileBoundary,
+    int SharedZoneConflictsResolved,
+    IReadOnlyList<ExistingDungeonEncounterZoneSample> Samples);
+
 public sealed record ApplyContextCatalog(
     IReadOnlyDictionary<FormKey, Func<ISkyrimMod, ICell>> Cells,
     IReadOnlyDictionary<FormKey, Func<ISkyrimMod, IWorldspace>> Worldspaces,
@@ -146,6 +167,7 @@ public sealed record ApplyResult(
     public int CellsForwardedThroughFwmf { get; init; }
     public int WorldspacesForwardedThroughFwmf { get; init; }
     public int EncounterZoneDifficultyChangesApplied { get; init; }
+    public int ExistingDungeonEncounterZoneChangesApplied { get; init; }
     public int CombatBoundaryChangesApplied { get; init; }
 
     public int TotalApplied =>
@@ -173,6 +195,13 @@ public sealed record PatchPlan(
     public string DifficultyProfileDisplayName { get; init; } = string.Empty;
     public int EncounterZoneDifficultyChanges { get; init; }
     public int CombatBoundaryChanges { get; init; }
+    public ExistingDungeonEncounterZoneBiasSummary ExistingDungeonEncounterZoneBias
+        { get; init; } = new(
+            new Dictionary<DungeonCategory, int>(),
+            0,
+            0,
+            0,
+            []);
     public DungeonTierBiasSummary DungeonTierBias { get; init; } = new(
         new Dictionary<DungeonCategory, int>(),
         new Dictionary<int, int>(),

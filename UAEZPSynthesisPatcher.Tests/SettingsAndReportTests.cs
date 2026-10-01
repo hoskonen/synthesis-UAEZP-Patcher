@@ -272,8 +272,10 @@ public sealed class SettingsAndReportTests
         AssertSettingMetadata<DungeonDifficultySettings>(
             nameof(DungeonDifficultySettings.EnableDungeonTierBias),
             "Enable Dungeon Tier Bias",
-            "Raises the selected UAEZP dummy-zone tier for classified " +
-            "interior dungeons. Existing XEZN assignments are never shifted.");
+            "Raises newly assigned UAEZP dummy-zone tiers and adjusts the " +
+            "MinLevel of existing resolvable dungeon encounter zones using " +
+            "the active difficulty profile. Existing CELL XEZN links are " +
+            "preserved.");
         AssertSettingMetadata<DungeonDifficultySettings>(
             nameof(DungeonDifficultySettings.CaveTierOffset),
             "Cave Tier Offset");

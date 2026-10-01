@@ -709,6 +709,75 @@ public sealed class PatchApplierTests
     }
 
     [TestMethod]
+    public void ExistingDungeonDifficultyAndBoundaryCombineInOnePreservingOverride()
+    {
+        var source = NewMod("DungeonZoneWinner.esp");
+        IEncounterZone winning = source.EncounterZones.AddNew();
+        winning.EditorID = "ExistingDungeonZone";
+        winning.MinLevel = 6;
+        winning.MaxLevel = 42;
+        winning.Rank = 3;
+        winning.Flags = EncounterZone.Flag.NeverResets |
+            EncounterZone.Flag.MatchPcBelowMinimumLevel;
+        EncounterZone.Flag originalFlags = winning.Flags;
+        var zoneSnapshot = new RecordSnapshot(
+            PlannedRecordType.EncounterZone,
+            winning.FormKey,
+            winning.EditorID,
+            source.ModKey,
+            false,
+            false)
+        {
+            EncounterZoneMinimumLevel = winning.MinLevel,
+        };
+        RecordSnapshot cellSnapshot = TestData.Record(
+            PlannedRecordType.Cell,
+            0x7100,
+            satisfied: true) with
+        {
+            EncounterZoneTarget = winning.FormKey,
+            DungeonCategory = DungeonCategory.Cave,
+            IsInteriorCell = true,
+        };
+        var settings = new Settings
+        {
+            DryRun = false,
+            AssignMissingCellEncounterZones = false,
+            AssignMissingWorldspaceEncounterZones = false,
+            EnableDungeonTierBias = true,
+            DisableCombatBoundaries = true,
+        };
+        var patch = NewMod("Output.esp");
+        PlanningRun run = BuildRun(
+            cells: [cellSnapshot],
+            encounterZones: [zoneSnapshot],
+            encounterZoneFactories:
+                new Dictionary<FormKey, Func<ISkyrimMod, IEncounterZone>>
+                {
+                    [winning.FormKey] = output =>
+                        output.EncounterZones.GetOrAddAsOverride(winning),
+                },
+            settings: settings);
+
+        ApplyResult result = PatchApplier.Apply(patch, run);
+        IEncounterZoneGetter applied = patch.EncounterZones.Single();
+
+        Assert.AreEqual(1, patch.EncounterZones.Count);
+        Assert.AreEqual(0, patch.Cells.Count);
+        Assert.AreEqual(1, result.ExistingDungeonEncounterZoneChangesApplied);
+        Assert.AreEqual(1, result.CombatBoundaryChangesApplied);
+        Assert.AreEqual(7, applied.MinLevel);
+        Assert.AreEqual(42, applied.MaxLevel);
+        Assert.AreEqual(3, applied.Rank);
+        Assert.AreEqual("ExistingDungeonZone", applied.EditorID);
+        Assert.AreEqual(
+            originalFlags | EncounterZone.Flag.DisableCombatBoundary,
+            applied.Flags);
+        Assert.AreEqual(6, winning.MinLevel);
+        Assert.AreEqual(originalFlags, winning.Flags);
+    }
+
+    [TestMethod]
     public void ExistingCellEncounterZoneCreatesNoOverride()
     {
         AssertNoOverrideForSatisfied(PlannedRecordType.Cell);

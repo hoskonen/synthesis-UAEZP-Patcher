@@ -21,6 +21,7 @@ public static class PatchApplier
         int worldspacesApplied = 0;
         int encounterZonesApplied = 0;
         int encounterZoneDifficultyChangesApplied = 0;
+        int existingDungeonEncounterZoneChangesApplied = 0;
         int combatBoundaryChangesApplied = 0;
         int cellsForwardedThroughFwmf = 0;
         int worldspacesForwardedThroughFwmf = 0;
@@ -50,9 +51,13 @@ public static class PatchApplier
                     case PlannedRecordType.EncounterZone:
                         ApplyEncounterZone(patchMod, contexts, change);
                         encounterZonesApplied++;
-                        if (change.DesiredEncounterZoneMinimumLevel is not null)
+                        if (change.IsDifficultyProfileMinimumLevelChange)
                         {
                             encounterZoneDifficultyChangesApplied++;
+                        }
+                        if (change.IsExistingDungeonMinimumLevelChange)
+                        {
+                            existingDungeonEncounterZoneChangesApplied++;
                         }
                         if (change.AddDisableCombatBoundary)
                         {
@@ -89,6 +94,8 @@ public static class PatchApplier
                 worldspacesForwardedThroughFwmf,
             EncounterZoneDifficultyChangesApplied =
                 encounterZoneDifficultyChangesApplied,
+            ExistingDungeonEncounterZoneChangesApplied =
+                existingDungeonEncounterZoneChangesApplied,
             CombatBoundaryChangesApplied = combatBoundaryChangesApplied,
         };
         VerifyCounts(run.Plan, result);
@@ -153,7 +160,11 @@ public static class PatchApplier
             {
                 bool hasDifficulty =
                     change.DesiredEncounterZoneMinimumLevel is not null;
+                bool hasDifficultyIntent =
+                    change.IsDifficultyProfileMinimumLevelChange ||
+                    change.IsExistingDungeonMinimumLevelChange;
                 if ((!change.AddDisableCombatBoundary && !hasDifficulty) ||
+                    hasDifficulty != hasDifficultyIntent ||
                     change.AssignedDummyZone is not null ||
                     change.ForwardedEncounterZone is not null ||
                     (change.AddDisableCombatBoundary &&
@@ -300,6 +311,8 @@ public static class PatchApplier
                 plan.FwmfForwards.Worldspaces ||
             result.EncounterZoneDifficultyChangesApplied !=
                 plan.EncounterZoneDifficultyChanges ||
+            result.ExistingDungeonEncounterZoneChangesApplied !=
+                plan.ExistingDungeonEncounterZoneBias.PlannedChanges ||
             result.CombatBoundaryChangesApplied !=
                 plan.CombatBoundaryChanges ||
             result.TotalApplied != plan.TotalPlannedOverrides)
@@ -320,6 +333,9 @@ public static class PatchApplier
                 $"ECZN difficulty " +
                 $"{result.EncounterZoneDifficultyChangesApplied}/" +
                 $"{plan.EncounterZoneDifficultyChanges}, " +
+                $"existing dungeon ECZN difficulty " +
+                $"{result.ExistingDungeonEncounterZoneChangesApplied}/" +
+                $"{plan.ExistingDungeonEncounterZoneBias.PlannedChanges}, " +
                 $"combat boundary {result.CombatBoundaryChangesApplied}/" +
                 $"{plan.CombatBoundaryChanges}.");
         }

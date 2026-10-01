@@ -209,6 +209,7 @@ public static class StatePlanner
                 ? encounterZoneFormKey
                 : null,
             ResolvedEncounterZoneEditorId = resolvedEncounterZone?.EditorID,
+            EncounterZoneMinimumLevel = resolvedEncounterZone?.MinLevel,
         };
     }
 
