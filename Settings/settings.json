@@ -3,6 +3,7 @@
   "AssignMissingWorldspaceEncounterZones": true,
   "DisableCombatBoundaries": true,
   "ForwardEncounterZonesThroughFwmf": false,
+  "DifficultyProfile": "MatchValidatedSource",
   "DummyZoneMode": "DeterministicRandom",
   "Seed": 38174,
   "DryRun": true

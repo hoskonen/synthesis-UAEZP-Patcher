@@ -16,6 +16,11 @@ public sealed class Settings
         new();
 
     [Newtonsoft.Json.JsonIgnore]
+    [SynthesisSettingName("Encounter Zone Difficulty")]
+    public EncounterZoneDifficultySettings EncounterZoneDifficulty { get; set; } =
+        new();
+
+    [Newtonsoft.Json.JsonIgnore]
     [SynthesisSettingName("Encounter Zone Behavior")]
     public EncounterZoneBehaviorSettings EncounterZoneBehavior { get; set; } =
         new();
@@ -54,6 +59,13 @@ public sealed class Settings
     {
         get => Compatibility.ForwardEncounterZonesThroughFwmf;
         set => Compatibility.ForwardEncounterZonesThroughFwmf = value;
+    }
+
+    [SynthesisIgnoreSetting]
+    public EncounterZoneDifficultyProfileSelection DifficultyProfile
+    {
+        get => EncounterZoneDifficulty.DifficultyProfile;
+        set => EncounterZoneDifficulty.DifficultyProfile = value;
     }
 
     [SynthesisIgnoreSetting]
@@ -113,6 +125,16 @@ public sealed class EncounterZoneBehaviorSettings
     public bool DisableCombatBoundaries { get; set; } = true;
 }
 
+public sealed class EncounterZoneDifficultySettings
+{
+    [SynthesisSettingName("Difficulty Profile")]
+    [SynthesisTooltip(
+        "Defines the numeric minimum levels of the nine ordered UAEZP zone " +
+        "tiers. Match Validated Source preserves the active UAEZP.esp values.")]
+    public EncounterZoneDifficultyProfileSelection DifficultyProfile { get; set; } =
+        EncounterZoneDifficultyProfileSelection.MatchValidatedSource;
+}
+
 public sealed class CompatibilitySettings
 {
     [SynthesisSettingName("Forward encounter zones through FWMF")]
@@ -142,6 +164,21 @@ public static class SettingsValidator
         {
             throw new InvalidOperationException(
                 $"Unsupported dummy-zone mode value: {(int)settings.DummyZoneMode}.");
+        }
+
+        if (!Enum.IsDefined(settings.DifficultyProfile))
+        {
+            throw new InvalidOperationException(
+                $"Unsupported difficulty profile value: " +
+                $"{(int)settings.DifficultyProfile}.");
+        }
+
+        if (settings.DifficultyProfile ==
+            EncounterZoneDifficultyProfileSelection.Custom)
+        {
+            throw new InvalidOperationException(
+                "Custom difficulty profile data is not configured. Use Match " +
+                "Validated Source, UAEZP Easy, or UAEZP Hard.");
         }
     }
 }

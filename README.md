@@ -90,9 +90,33 @@ CELL and WRLD overrides whose winning FWMF-family record removed a valid earlier
 | **Assign Missing Worldspace Encounter Zones** | `true` | Assigns a UAEZP dummy zone to winning WRLD records whose `XEZN` is null. |
 | **Disable Combat Boundaries** | `true` | Adds `Disable Combat Boundary` to winning ECZN records that do not already have it. |
 | **Forward encounter zones through FWMF** | `false` | When the actual winning CELL or WRLD override comes from an FWMF-family plugin and has an empty `XEZN`, restores the nearest earlier resolvable, non-deleted assignment. |
+| **Difficulty Profile** | `MatchValidatedSource` | Defines the numeric meaning of the nine ordered zone tiers. The default resolves to the active validated UAEZP Easy or Hard source values. |
 | **Dummy Zone Mode** | `DeterministicRandom` | Selects how missing CELL/WRLD links are assigned. `DeterministicRandom` produces a stable per-record selection using **Seed**. `First` always selects `DummyEncounterZone0`. |
 | **Seed** | `38174` | Controls `DeterministicRandom` assignment. The same seed, load order, and settings reproduce the same assignments. |
 | **Dry Run** | `true` | Performs discovery, validation, planning, and reporting without creating functional Skyrim overrides. Disable only after reviewing the report. |
+
+## Difficulty profiles and selection
+
+Difficulty and selection are deliberately separate concepts:
+
+```text
+Difficulty profile = what each zone tier means numerically
+Selection mode     = which zone tier a CELL/WRLD receives
+```
+
+The predefined **UAEZP Easy** profile uses minimum levels `3, 5, 7, 9, 11,
+11, 13, 15, 17`. **UAEZP Hard** uses `10, 15, 20, 25, 30, 35, 40, 45,
+50`. **Match Validated Source** is the compatibility-safe default and resolves
+to whichever of those schemas is present in the active `UAEZP.esp`.
+
+This release does not rewrite the nine source ECZN records. An explicitly
+selected Easy or Hard profile must therefore match the installed source
+variant. **Custom** is reserved for a follow-up that can supply and apply custom
+tier data; selecting it now produces a clear validation error.
+
+Changing the difficulty-profile setting does not participate in zone selection.
+`DeterministicRandom` and `First` continue selecting from the same FormKey-sorted
+dummy-zone list.
 
 ## Load-order behavior
 
@@ -137,7 +161,11 @@ Exact assignments are not expected to match the original Pascal script, which us
 
 ## Reports
 
-Dry Run reports the selected Easy or Hard source, algorithm and seed, all nine dummy-zone identities, CELL/WRLD/ECZN scan and eligibility counts, deleted skips, planned totals, separate CELL/WRLD FWMF forward counts, assignment distribution, and compact origin-plugin and provenance diagnostics.
+Dry Run reports the selected Easy or Hard source, active difficulty profile,
+algorithm and seed, all nine dummy-zone identities, CELL/WRLD/ECZN scan and
+eligibility counts, deleted skips, planned totals, separate CELL/WRLD FWMF
+forward counts, assignment distribution, and compact origin-plugin and
+provenance diagnostics.
 
 The provenance section is intentionally retained for the initial release because it is useful when diagnosing pre-existing encounter-zone state. Its plugin breakdowns and example lists are capped to avoid per-record log spam.
 

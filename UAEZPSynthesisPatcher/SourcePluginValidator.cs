@@ -9,12 +9,6 @@ public static class SourcePluginValidator
     public const int ExpectedDummyZoneCount = 9;
     public const string DummyEditorIdPrefix = "DummyEncounterZone";
 
-    private static readonly byte[] EasyMinimumLevels =
-        [3, 5, 7, 9, 11, 11, 13, 15, 17];
-
-    private static readonly byte[] HardMinimumLevels =
-        [10, 15, 20, 25, 30, 35, 40, 45, 50];
-
     private const EncounterZone.Flag ExpectedFlags =
         EncounterZone.Flag.NeverResets |
         EncounterZone.Flag.DisableCombatBoundary;
@@ -98,14 +92,20 @@ public static class SourcePluginValidator
         }
 
         byte[] minimumLevels = ordered.Select(zone => zone.MinLevel).ToArray();
-        string variant = minimumLevels.SequenceEqual(EasyMinimumLevels)
-            ? "Easy"
-            : minimumLevels.SequenceEqual(HardMinimumLevels)
-                ? "Hard"
-                : throw new InvalidOperationException(
-                    $"'{SupportedPluginFileName}' dummy-zone minimum levels do not " +
-                    "match the audited Easy or Hard schema. Found: " +
-                    string.Join(", ", minimumLevels));
+        EncounterZoneDifficultyProfile difficultyProfile;
+        try
+        {
+            difficultyProfile = EncounterZoneDifficultyResolver
+                .MatchValidatedSource(minimumLevels);
+        }
+        catch (InvalidOperationException error)
+        {
+            throw new InvalidOperationException(
+                $"'{SupportedPluginFileName}' dummy-zone minimum levels do not " +
+                "match the audited Easy or Hard schema. Found: " +
+                string.Join(", ", minimumLevels),
+                error);
+        }
 
         IReadOnlyList<ValidatedDummyZone> validated = ordered
             .Select(zone => new ValidatedDummyZone(
@@ -116,7 +116,10 @@ public static class SourcePluginValidator
                 zone.Flags))
             .ToList();
 
-        return new ValidatedSourcePlugin(source.ModKey, variant, validated);
+        return new ValidatedSourcePlugin(
+            source.ModKey,
+            difficultyProfile.SourceVariant,
+            validated);
     }
 
     private static string Describe(DummyZoneDefinition zone)

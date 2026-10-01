@@ -18,6 +18,12 @@ public static class DryRunReport
         text.AppendLine();
         text.AppendLine($"Source plugin: {run.SourcePlugin.ModKey.FileName.String}");
         text.AppendLine($"Source variant: {run.SourcePlugin.Variant}");
+        EncounterZoneDifficultyProfile difficultyProfile =
+            run.DifficultyProfile ?? EncounterZoneDifficultyResolver.Resolve(
+                settings.DifficultyProfile,
+                run.SourcePlugin);
+        text.AppendLine(
+            $"Difficulty profile: {difficultyProfile.DisplayName}");
         text.AppendLine(
             $"Algorithm version: {DeterministicDummyZoneSelector.AlgorithmVersion}");
         text.AppendLine($"Dummy-zone mode: {FormatMode(settings.DummyZoneMode)}");

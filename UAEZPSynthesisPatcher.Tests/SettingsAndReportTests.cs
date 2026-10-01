@@ -15,6 +15,9 @@ public sealed class SettingsAndReportTests
         Assert.IsTrue(settings.AssignMissingWorldspaceEncounterZones);
         Assert.IsTrue(settings.DisableCombatBoundaries);
         Assert.IsFalse(settings.ForwardEncounterZonesThroughFwmf);
+        Assert.AreEqual(
+            EncounterZoneDifficultyProfileSelection.MatchValidatedSource,
+            settings.DifficultyProfile);
         Assert.AreEqual(DummyZoneMode.DeterministicRandom, settings.DummyZoneMode);
         Assert.AreEqual(38174, settings.Seed);
         Assert.IsTrue(settings.DryRun);
@@ -38,6 +41,8 @@ public sealed class SettingsAndReportTests
             AssignMissingWorldspaceEncounterZones = false,
             DisableCombatBoundaries = false,
             ForwardEncounterZonesThroughFwmf = true,
+            DifficultyProfile =
+                EncounterZoneDifficultyProfileSelection.UAEZPEasy,
             DummyZoneMode = DummyZoneMode.First,
             Seed = 42,
             DryRun = false,
@@ -53,6 +58,9 @@ public sealed class SettingsAndReportTests
             "EncounterZoneBehavior",
             StringComparison.Ordinal));
         Assert.IsFalse(json.Contains(
+            "EncounterZoneDifficulty",
+            StringComparison.Ordinal));
+        Assert.IsFalse(json.Contains(
             "Compatibility",
             StringComparison.Ordinal));
         Assert.IsFalse(json.Contains("Testing", StringComparison.Ordinal));
@@ -63,6 +71,9 @@ public sealed class SettingsAndReportTests
         Assert.IsFalse(roundTrip.AssignMissingWorldspaceEncounterZones);
         Assert.IsFalse(roundTrip.DisableCombatBoundaries);
         Assert.IsTrue(roundTrip.ForwardEncounterZonesThroughFwmf);
+        Assert.AreEqual(
+            EncounterZoneDifficultyProfileSelection.UAEZPEasy,
+            roundTrip.DifficultyProfile);
         Assert.AreEqual(DummyZoneMode.First, roundTrip.DummyZoneMode);
         Assert.AreEqual(42, roundTrip.Seed);
         Assert.IsFalse(roundTrip.DryRun);
@@ -77,6 +88,9 @@ public sealed class SettingsAndReportTests
         AssertSettingMetadata<Settings>(
             nameof(Settings.EncounterZoneBehavior),
             "Encounter Zone Behavior");
+        AssertSettingMetadata<Settings>(
+            nameof(Settings.EncounterZoneDifficulty),
+            "Encounter Zone Difficulty");
         AssertSettingMetadata<Settings>(
             nameof(Settings.Compatibility),
             "Compatibility");
@@ -110,6 +124,12 @@ public sealed class SettingsAndReportTests
             "Disable Combat Boundaries",
             "Adds Disable Combat Boundary to encounter-zone records while " +
             "preserving existing flags.");
+        AssertSettingMetadata<EncounterZoneDifficultySettings>(
+            nameof(EncounterZoneDifficultySettings.DifficultyProfile),
+            "Difficulty Profile",
+            "Defines the numeric minimum levels of the nine ordered UAEZP " +
+            "zone tiers. Match Validated Source preserves the active " +
+            "UAEZP.esp values.");
         AssertSettingMetadata<CompatibilitySettings>(
             nameof(CompatibilitySettings.ForwardEncounterZonesThroughFwmf),
             "Forward encounter zones through FWMF",
@@ -128,6 +148,7 @@ public sealed class SettingsAndReportTests
             nameof(Settings.AssignMissingWorldspaceEncounterZones),
             nameof(Settings.DisableCombatBoundaries),
             nameof(Settings.ForwardEncounterZonesThroughFwmf),
+            nameof(Settings.DifficultyProfile),
             nameof(Settings.DummyZoneMode),
             nameof(Settings.Seed),
             nameof(Settings.DryRun),
@@ -156,6 +177,7 @@ public sealed class SettingsAndReportTests
         string report = DryRunReport.Render(new PlanningRun(source, plan), settings);
 
         StringAssert.Contains(report, "Source variant: Easy");
+        StringAssert.Contains(report, "Difficulty profile: UAEZP Easy");
         StringAssert.Contains(report, "Algorithm version: v1");
         StringAssert.Contains(report, "Total: 3");
         StringAssert.Contains(report, "No Skyrim records were modified");

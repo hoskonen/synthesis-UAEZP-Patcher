@@ -39,6 +39,10 @@ public static class StatePlanner
 
         ValidatedSourcePlugin source =
             SourcePluginValidator.Validate(sourceCandidates);
+        EncounterZoneDifficultyProfile difficultyProfile =
+            EncounterZoneDifficultyResolver.Resolve(
+                settings.DifficultyProfile,
+                source);
         source = ResolveWinningDummyZones(state, source);
 
         var cellContexts = state.LoadOrder.PriorityOrder
@@ -132,6 +136,7 @@ public static class StatePlanner
         return new PlanningRun(source, plan)
         {
             ApplyContexts = applyContexts,
+            DifficultyProfile = difficultyProfile,
         };
     }
 

@@ -143,4 +143,5 @@ public sealed record PlanningRun(
     PatchPlan Plan)
 {
     public ApplyContextCatalog? ApplyContexts { get; init; }
+    public EncounterZoneDifficultyProfile? DifficultyProfile { get; init; }
 }
