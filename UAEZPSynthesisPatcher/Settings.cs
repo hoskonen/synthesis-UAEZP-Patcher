@@ -1,4 +1,6 @@
+using System.Runtime.Serialization;
 using Mutagen.Bethesda.Synthesis.Settings;
+using Newtonsoft.Json;
 
 namespace UAEZPSynthesisPatcher;
 
@@ -10,29 +12,88 @@ public enum DummyZoneMode
 
 public sealed class Settings
 {
-    [Newtonsoft.Json.JsonIgnore]
+    private EncounterZoneAssignmentSettings _encounterZoneAssignment = new();
+    private EncounterZoneDifficultySettings _encounterZoneDifficulty = new();
+    private EncounterZoneBehaviorSettings _encounterZoneBehavior = new();
+    private CompatibilitySettings _compatibility = new();
+    private TestingSettings _testing = new();
+
+    private bool _hasCanonicalEncounterZoneAssignment;
+    private bool _hasCanonicalEncounterZoneDifficulty;
+    private bool _hasCanonicalEncounterZoneBehavior;
+    private bool _hasCanonicalCompatibility;
+    private bool _hasCanonicalTesting;
+
+    private bool? _legacyAssignMissingCellEncounterZones;
+    private bool? _legacyAssignMissingWorldspaceEncounterZones;
+    private DummyZoneMode? _legacyDummyZoneMode;
+    private int? _legacySeed;
+    private EncounterZoneDifficultyProfileSelection? _legacyDifficultyProfile;
+    private bool? _legacyDisableCombatBoundaries;
+    private bool? _legacyForwardEncounterZonesThroughFwmf;
+    private bool? _legacyDryRun;
+
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     [SynthesisSettingName("Encounter Zone Assignment")]
-    public EncounterZoneAssignmentSettings EncounterZoneAssignment { get; set; } =
-        new();
+    public EncounterZoneAssignmentSettings EncounterZoneAssignment
+    {
+        get => _encounterZoneAssignment;
+        set
+        {
+            _encounterZoneAssignment = value ?? new();
+            _hasCanonicalEncounterZoneAssignment = true;
+        }
+    }
 
-    [Newtonsoft.Json.JsonIgnore]
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     [SynthesisSettingName("Encounter Zone Difficulty")]
-    public EncounterZoneDifficultySettings EncounterZoneDifficulty { get; set; } =
-        new();
+    public EncounterZoneDifficultySettings EncounterZoneDifficulty
+    {
+        get => _encounterZoneDifficulty;
+        set
+        {
+            _encounterZoneDifficulty = value ?? new();
+            _hasCanonicalEncounterZoneDifficulty = true;
+        }
+    }
 
-    [Newtonsoft.Json.JsonIgnore]
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     [SynthesisSettingName("Encounter Zone Behavior")]
-    public EncounterZoneBehaviorSettings EncounterZoneBehavior { get; set; } =
-        new();
+    public EncounterZoneBehaviorSettings EncounterZoneBehavior
+    {
+        get => _encounterZoneBehavior;
+        set
+        {
+            _encounterZoneBehavior = value ?? new();
+            _hasCanonicalEncounterZoneBehavior = true;
+        }
+    }
 
-    [Newtonsoft.Json.JsonIgnore]
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     [SynthesisSettingName("Compatibility")]
-    public CompatibilitySettings Compatibility { get; set; } = new();
+    public CompatibilitySettings Compatibility
+    {
+        get => _compatibility;
+        set
+        {
+            _compatibility = value ?? new();
+            _hasCanonicalCompatibility = true;
+        }
+    }
 
-    [Newtonsoft.Json.JsonIgnore]
+    [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
     [SynthesisSettingName("Testing")]
-    public TestingSettings Testing { get; set; } = new();
+    public TestingSettings Testing
+    {
+        get => _testing;
+        set
+        {
+            _testing = value ?? new();
+            _hasCanonicalTesting = true;
+        }
+    }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public bool AssignMissingCellEncounterZones
     {
@@ -40,6 +101,7 @@ public sealed class Settings
         set => EncounterZoneAssignment.AssignMissingCellEncounterZones = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public bool AssignMissingWorldspaceEncounterZones
     {
@@ -47,6 +109,7 @@ public sealed class Settings
         set => EncounterZoneAssignment.AssignMissingWorldspaceEncounterZones = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public bool DisableCombatBoundaries
     {
@@ -54,6 +117,7 @@ public sealed class Settings
         set => EncounterZoneBehavior.DisableCombatBoundaries = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public bool ForwardEncounterZonesThroughFwmf
     {
@@ -61,6 +125,7 @@ public sealed class Settings
         set => Compatibility.ForwardEncounterZonesThroughFwmf = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public EncounterZoneDifficultyProfileSelection DifficultyProfile
     {
@@ -68,6 +133,7 @@ public sealed class Settings
         set => EncounterZoneDifficulty.DifficultyProfile = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public DummyZoneMode DummyZoneMode
     {
@@ -75,6 +141,7 @@ public sealed class Settings
         set => EncounterZoneAssignment.DummyZoneMode = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public int Seed
     {
@@ -82,11 +149,104 @@ public sealed class Settings
         set => EncounterZoneAssignment.Seed = value;
     }
 
+    [JsonIgnore]
     [SynthesisIgnoreSetting]
     public bool DryRun
     {
         get => Testing.DryRun;
         set => Testing.DryRun = value;
+    }
+
+    [JsonProperty(nameof(AssignMissingCellEncounterZones))]
+    private bool LegacyAssignMissingCellEncounterZones
+    {
+        set => _legacyAssignMissingCellEncounterZones = value;
+    }
+
+    [JsonProperty(nameof(AssignMissingWorldspaceEncounterZones))]
+    private bool LegacyAssignMissingWorldspaceEncounterZones
+    {
+        set => _legacyAssignMissingWorldspaceEncounterZones = value;
+    }
+
+    [JsonProperty(nameof(DummyZoneMode))]
+    private DummyZoneMode LegacyDummyZoneMode
+    {
+        set => _legacyDummyZoneMode = value;
+    }
+
+    [JsonProperty(nameof(Seed))]
+    private int LegacySeed
+    {
+        set => _legacySeed = value;
+    }
+
+    [JsonProperty(nameof(DifficultyProfile))]
+    private EncounterZoneDifficultyProfileSelection LegacyDifficultyProfile
+    {
+        set => _legacyDifficultyProfile = value;
+    }
+
+    [JsonProperty(nameof(DisableCombatBoundaries))]
+    private bool LegacyDisableCombatBoundaries
+    {
+        set => _legacyDisableCombatBoundaries = value;
+    }
+
+    [JsonProperty(nameof(ForwardEncounterZonesThroughFwmf))]
+    private bool LegacyForwardEncounterZonesThroughFwmf
+    {
+        set => _legacyForwardEncounterZonesThroughFwmf = value;
+    }
+
+    [JsonProperty(nameof(DryRun))]
+    private bool LegacyDryRun
+    {
+        set => _legacyDryRun = value;
+    }
+
+    [OnDeserialized]
+    private void ApplyLegacySettings(StreamingContext _)
+    {
+        if (!_hasCanonicalEncounterZoneAssignment)
+        {
+            EncounterZoneAssignment.AssignMissingCellEncounterZones =
+                _legacyAssignMissingCellEncounterZones ??
+                EncounterZoneAssignment.AssignMissingCellEncounterZones;
+            EncounterZoneAssignment.AssignMissingWorldspaceEncounterZones =
+                _legacyAssignMissingWorldspaceEncounterZones ??
+                EncounterZoneAssignment.AssignMissingWorldspaceEncounterZones;
+            EncounterZoneAssignment.DummyZoneMode =
+                _legacyDummyZoneMode ?? EncounterZoneAssignment.DummyZoneMode;
+            EncounterZoneAssignment.Seed =
+                _legacySeed ?? EncounterZoneAssignment.Seed;
+        }
+
+        if (!_hasCanonicalEncounterZoneDifficulty)
+        {
+            EncounterZoneDifficulty.DifficultyProfile =
+                _legacyDifficultyProfile ??
+                EncounterZoneDifficulty.DifficultyProfile;
+        }
+
+        if (!_hasCanonicalEncounterZoneBehavior)
+        {
+            EncounterZoneBehavior.DisableCombatBoundaries =
+                _legacyDisableCombatBoundaries ??
+                EncounterZoneBehavior.DisableCombatBoundaries;
+        }
+
+        if (!_hasCanonicalCompatibility)
+        {
+            Compatibility.ForwardEncounterZonesThroughFwmf =
+                _legacyForwardEncounterZonesThroughFwmf ??
+                Compatibility.ForwardEncounterZonesThroughFwmf;
+        }
+
+        if (!_hasCanonicalTesting)
+        {
+            Testing.DryRun = _legacyDryRun ?? Testing.DryRun;
+        }
     }
 }
 

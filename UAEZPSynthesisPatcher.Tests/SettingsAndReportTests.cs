@@ -1,5 +1,7 @@
 using Mutagen.Bethesda.Plugins;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 
 namespace UAEZPSynthesisPatcher.Tests;
 
@@ -33,50 +35,152 @@ public sealed class SettingsAndReportTests
     }
 
     [TestMethod]
-    public void UiSectionsPreserveFlatSettingsJsonContract()
+    public void GroupedSettingsRoundTripPreservesEveryValue()
     {
         var settings = new Settings
         {
-            AssignMissingCellEncounterZones = false,
-            AssignMissingWorldspaceEncounterZones = false,
-            DisableCombatBoundaries = false,
-            ForwardEncounterZonesThroughFwmf = true,
-            DifficultyProfile =
-                EncounterZoneDifficultyProfileSelection.UAEZPEasy,
-            DummyZoneMode = DummyZoneMode.First,
-            Seed = 42,
-            DryRun = false,
+            EncounterZoneAssignment = new EncounterZoneAssignmentSettings
+            {
+                AssignMissingCellEncounterZones = false,
+                AssignMissingWorldspaceEncounterZones = false,
+                DummyZoneMode = DummyZoneMode.First,
+                Seed = 12345,
+            },
+            EncounterZoneDifficulty = new EncounterZoneDifficultySettings
+            {
+                DifficultyProfile =
+                    EncounterZoneDifficultyProfileSelection.UAEZPHard,
+            },
+            EncounterZoneBehavior = new EncounterZoneBehaviorSettings
+            {
+                DisableCombatBoundaries = false,
+            },
+            Compatibility = new CompatibilitySettings
+            {
+                ForwardEncounterZonesThroughFwmf = true,
+            },
+            Testing = new TestingSettings
+            {
+                DryRun = false,
+            },
         };
 
-        string json = JsonConvert.SerializeObject(settings);
-        Settings roundTrip = JsonConvert.DeserializeObject<Settings>(json)!;
-
-        Assert.IsFalse(json.Contains(
-            "EncounterZoneAssignment",
-            StringComparison.Ordinal));
-        Assert.IsFalse(json.Contains(
-            "EncounterZoneBehavior",
-            StringComparison.Ordinal));
-        Assert.IsFalse(json.Contains(
-            "EncounterZoneDifficulty",
-            StringComparison.Ordinal));
-        Assert.IsFalse(json.Contains(
-            "Compatibility",
-            StringComparison.Ordinal));
-        Assert.IsFalse(json.Contains("Testing", StringComparison.Ordinal));
-        StringAssert.Contains(
+        var serializerSettings = new JsonSerializerSettings();
+        serializerSettings.Converters.Add(new StringEnumConverter());
+        string json = JsonConvert.SerializeObject(settings, serializerSettings);
+        Settings roundTrip = JsonConvert.DeserializeObject<Settings>(
             json,
-            "\"ForwardEncounterZonesThroughFwmf\":true");
+            serializerSettings)!;
+        JObject root = JObject.Parse(json);
+
+        Assert.IsNotNull(root[nameof(Settings.EncounterZoneAssignment)]);
+        Assert.IsNotNull(root[nameof(Settings.EncounterZoneDifficulty)]);
+        Assert.IsNotNull(root[nameof(Settings.EncounterZoneBehavior)]);
+        Assert.IsNotNull(root[nameof(Settings.Compatibility)]);
+        Assert.IsNotNull(root[nameof(Settings.Testing)]);
+        Assert.AreEqual(5, root.Properties().Count());
+        Assert.AreEqual(
+            "UAEZPHard",
+            root[nameof(Settings.EncounterZoneDifficulty)]![
+                nameof(EncounterZoneDifficultySettings.DifficultyProfile)]!
+                .Value<string>());
+        Assert.IsFalse(
+            root[nameof(Settings.Testing)]![nameof(TestingSettings.DryRun)]!
+                .Value<bool>());
+        foreach (string legacyName in LegacyFlatSettingNames())
+        {
+            Assert.IsNull(root[legacyName]);
+        }
         Assert.IsFalse(roundTrip.AssignMissingCellEncounterZones);
         Assert.IsFalse(roundTrip.AssignMissingWorldspaceEncounterZones);
         Assert.IsFalse(roundTrip.DisableCombatBoundaries);
         Assert.IsTrue(roundTrip.ForwardEncounterZonesThroughFwmf);
         Assert.AreEqual(
-            EncounterZoneDifficultyProfileSelection.UAEZPEasy,
+            EncounterZoneDifficultyProfileSelection.UAEZPHard,
             roundTrip.DifficultyProfile);
         Assert.AreEqual(DummyZoneMode.First, roundTrip.DummyZoneMode);
-        Assert.AreEqual(42, roundTrip.Seed);
+        Assert.AreEqual(12345, roundTrip.Seed);
         Assert.IsFalse(roundTrip.DryRun);
+    }
+
+    [TestMethod]
+    public void LegacyFlatJsonMigratesToGroupedSettings()
+    {
+        const string json = """
+            {
+              "AssignMissingCellEncounterZones": false,
+              "AssignMissingWorldspaceEncounterZones": false,
+              "DisableCombatBoundaries": false,
+              "ForwardEncounterZonesThroughFwmf": true,
+              "DifficultyProfile": "UAEZPHard",
+              "DummyZoneMode": "First",
+              "Seed": 12345,
+              "DryRun": false
+            }
+            """;
+
+        Settings settings = JsonConvert.DeserializeObject<Settings>(json)!;
+
+        Assert.IsFalse(settings.AssignMissingCellEncounterZones);
+        Assert.IsFalse(settings.AssignMissingWorldspaceEncounterZones);
+        Assert.AreEqual(DummyZoneMode.First, settings.DummyZoneMode);
+        Assert.AreEqual(12345, settings.Seed);
+        Assert.AreEqual(
+            EncounterZoneDifficultyProfileSelection.UAEZPHard,
+            settings.DifficultyProfile);
+        Assert.IsFalse(settings.DisableCombatBoundaries);
+        Assert.IsTrue(settings.ForwardEncounterZonesThroughFwmf);
+        Assert.IsFalse(settings.DryRun);
+    }
+
+    [TestMethod]
+    public void RuntimeAliasesExposeValuesSelectedInGroupedSections()
+    {
+        var settings = new Settings();
+        settings.EncounterZoneDifficulty.DifficultyProfile =
+            EncounterZoneDifficultyProfileSelection.UAEZPHard;
+        settings.Testing.DryRun = false;
+
+        Assert.AreEqual(
+            EncounterZoneDifficultyProfileSelection.UAEZPHard,
+            settings.DifficultyProfile);
+        Assert.IsFalse(settings.DryRun);
+    }
+
+    [TestMethod]
+    public void CanonicalGroupedValuesWinOverLegacyFlatValues()
+    {
+        const string json = """
+            {
+              "DifficultyProfile": "UAEZPEasy",
+              "DryRun": true,
+              "EncounterZoneDifficulty": {
+                "DifficultyProfile": "UAEZPHard"
+              },
+              "Testing": {
+                "DryRun": false
+              }
+            }
+            """;
+
+        Settings settings = JsonConvert.DeserializeObject<Settings>(json)!;
+
+        Assert.AreEqual(
+            EncounterZoneDifficultyProfileSelection.UAEZPHard,
+            settings.DifficultyProfile);
+        Assert.IsFalse(settings.DryRun);
+    }
+
+    private static IEnumerable<string> LegacyFlatSettingNames()
+    {
+        yield return nameof(Settings.AssignMissingCellEncounterZones);
+        yield return nameof(Settings.AssignMissingWorldspaceEncounterZones);
+        yield return nameof(Settings.DummyZoneMode);
+        yield return nameof(Settings.Seed);
+        yield return nameof(Settings.DifficultyProfile);
+        yield return nameof(Settings.DisableCombatBoundaries);
+        yield return nameof(Settings.ForwardEncounterZonesThroughFwmf);
+        yield return nameof(Settings.DryRun);
     }
 
     [TestMethod]

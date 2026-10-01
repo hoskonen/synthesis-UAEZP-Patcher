@@ -1,10 +1,20 @@
 {
-  "AssignMissingCellEncounterZones": true,
-  "AssignMissingWorldspaceEncounterZones": true,
-  "DisableCombatBoundaries": true,
-  "ForwardEncounterZonesThroughFwmf": false,
-  "DifficultyProfile": "MatchValidatedSource",
-  "DummyZoneMode": "DeterministicRandom",
-  "Seed": 38174,
-  "DryRun": true
+  "EncounterZoneAssignment": {
+    "AssignMissingCellEncounterZones": true,
+    "AssignMissingWorldspaceEncounterZones": true,
+    "DummyZoneMode": "DeterministicRandom",
+    "Seed": 38174
+  },
+  "EncounterZoneDifficulty": {
+    "DifficultyProfile": "MatchValidatedSource"
+  },
+  "EncounterZoneBehavior": {
+    "DisableCombatBoundaries": true
+  },
+  "Compatibility": {
+    "ForwardEncounterZonesThroughFwmf": false
+  },
+  "Testing": {
+    "DryRun": true
+  }
 }
