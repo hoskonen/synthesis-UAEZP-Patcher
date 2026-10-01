@@ -68,7 +68,10 @@ public static class DryRunReport
         text.AppendLine($"  Total: {run.Plan.FwmfForwards.Total}");
         text.AppendLine();
 
-        AppendDungeonTierBias(text, run.Plan, settings);
+        DungeonTierBiasReport.Append(
+            text,
+            run.Plan.DungeonTierBias,
+            settings.EnableDungeonTierBias);
 
         text.AppendLine("ECZN difficulty changes:");
         text.AppendLine(
@@ -91,58 +94,6 @@ public static class DryRunReport
         text.AppendLine();
         text.AppendLine("Dry run complete. No Skyrim records were modified.");
         return text.ToString();
-    }
-
-    private static void AppendDungeonTierBias(
-        StringBuilder text,
-        PatchPlan plan,
-        Settings settings)
-    {
-        text.AppendLine("Dungeon tier bias:");
-        text.AppendLine(
-            $"  Status: " +
-            $"{(settings.EnableDungeonTierBias ? "Enabled" : "Disabled")}");
-        foreach (DungeonCategory category in Enum.GetValues<DungeonCategory>()
-                     .Where(category => category != DungeonCategory.None))
-        {
-            plan.DungeonTierBias.AssignmentsByCategory.TryGetValue(
-                category,
-                out int count);
-            text.AppendLine($"  {FormatDungeonCategory(category)}: {count}");
-        }
-
-        text.AppendLine();
-        text.AppendLine("Tier shifts:");
-        if (plan.DungeonTierBias.TierShifts.Count == 0)
-        {
-            text.AppendLine("  (none)");
-        }
-        else
-        {
-            foreach ((int modifier, int count) in plan.DungeonTierBias.TierShifts
-                         .OrderBy(pair => pair.Key))
-            {
-                text.AppendLine($"  {modifier:+#;-#;0}: {count}");
-            }
-        }
-        text.AppendLine(
-            $"  Clamped at tier {EncounterZoneDifficultyResolver.TierCount - 1}: " +
-            $"{plan.DungeonTierBias.ClampedAtMaximum}");
-        text.AppendLine();
-    }
-
-    private static string FormatDungeonCategory(DungeonCategory category)
-    {
-        return category switch
-        {
-            DungeonCategory.Cave => "Cave",
-            DungeonCategory.NordicRuin => "Nordic Ruin",
-            DungeonCategory.DwemerRuin => "Dwemer Ruin",
-            DungeonCategory.Mine => "Mine",
-            DungeonCategory.Fort => "Fort",
-            DungeonCategory.OtherDungeon => "Other Dungeon",
-            _ => category.ToString(),
-        };
     }
 
     private static void AppendSummary(

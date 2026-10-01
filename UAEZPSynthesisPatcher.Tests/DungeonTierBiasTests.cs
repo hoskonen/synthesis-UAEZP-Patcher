@@ -247,6 +247,36 @@ public sealed class DungeonTierBiasTests
         StringAssert.Contains(report, "  Clamped at tier 8: 1");
     }
 
+    [TestMethod]
+    public void ApplyReportContainsCategoryShiftAndClampDiagnostics()
+    {
+        Settings settings = BiasSettings();
+        ValidatedSourcePlugin source =
+            SourcePluginValidator.Validate([TestData.EasySource()]);
+        PatchPlan plan = ReadOnlyPlanner.Build(
+            settings,
+            source.DummyZones,
+            [
+                CellWithBaseTier(8, DungeonCategory.Cave),
+                CellWithBaseTier(4, DungeonCategory.NordicRuin),
+            ],
+            [],
+            []);
+
+        string report = ApplyReport.Render(plan, new ApplyResult(2, 0, 0));
+
+        StringAssert.Contains(report, "Dungeon tier bias:");
+        StringAssert.Contains(report, "  Cave: 1");
+        StringAssert.Contains(report, "  Nordic Ruin: 1");
+        StringAssert.Contains(report, "  Dwemer Ruin: 0");
+        StringAssert.Contains(report, "  Mine: 0");
+        StringAssert.Contains(report, "  Fort: 0");
+        StringAssert.Contains(report, "  Other Dungeon: 0");
+        StringAssert.Contains(report, "Tier shifts:");
+        StringAssert.Contains(report, "  +1: 2");
+        StringAssert.Contains(report, "  Clamped at tier 8: 1");
+    }
+
     private static DungeonCategory Classify(params FormKey[] keywords)
     {
         return DungeonCategoryResolver.ClassifyKeywords(true, keywords);

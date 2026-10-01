@@ -43,6 +43,7 @@ public static class ApplyReport
             $"  Total: " +
             $"{result.CellsForwardedThroughFwmf + result.WorldspacesForwardedThroughFwmf}");
         text.AppendLine();
+        DungeonTierBiasReport.Append(text, plan.DungeonTierBias);
         text.AppendLine("ECZN difficulty changes:");
         text.AppendLine($"  Planned: {plan.EncounterZoneDifficultyChanges}");
         text.AppendLine(
